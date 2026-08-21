@@ -403,15 +403,78 @@ def build_app(engine: Vinzor, keys=None):
             # fill in rather than waiting on a blank page for the whole run.
             # The plan is already on the record; only the results are not.
             threading.Thread(
-                target=self._run_quietly, args=(task_id, today, party),
+                target=self._gather_then_check, args=(task_id, today, party),
                 daemon=True).start()
 
-        def _run_quietly(self, task_id: str, today: str, party: str) -> None:
-            """Run the checks, and never let one take the server with it."""
+        def _gather_then_check(self, task_id: str, today: str,
+                               party: str) -> None:
+            """Observe the outside world, then run the checks that read it.
+
+            The order matters and it is the architecture rather than a
+            convenience. An agent tool is handed a read-only view and has no
+            way to write anything -- which is what stops one settling a file,
+            and is not something to work around here. So the two facts that
+            come from outside this machine are minted at this boundary, the
+            way ``DESIGN.md`` says facts arrive, and the agents that read them
+            run afterwards.
+
+            Neither observation may stop an onboarding. A watchlist that is
+            down and a news service that is rate-limiting are ordinary states
+            of the world; what must never happen is either being recorded as
+            a clean result, and both adapters refuse rather than do that. The
+            checks then report the absence honestly, which is the finding an
+            officer acts on.
+            """
+            try:
+                self._observe_world(party, today)
+            except Exception as broke:      # noqa: BLE001
+                print("  onboarding could not gather: %s: %s"
+                      % (type(broke).__name__, broke), file=sys.stderr)
             try:
                 engine.run_task(task_id, when=today, party=party)
             except Exception as broke:      # noqa: BLE001
                 print("  an onboarding run stopped: %s: %s"
+                      % (type(broke).__name__, broke), file=sys.stderr)
+
+        def _observe_world(self, party: str, today: str) -> None:
+            """The watchlist and the press, recorded as facts about the day.
+
+            Each is attempted independently: a news service being busy is no
+            reason not to have screened, and a screening failure is no reason
+            to skip the press.
+            """
+            import os
+
+            from .screening import ScreeningUnavailable, WatchlistClient, screen
+
+            try:
+                screen(engine, party, screened_at=today,
+                       client=WatchlistClient(
+                           url=os.environ.get("VINZOR_SCREENING_URL",
+                                              "https://api.opensanctions.org"),
+                           api_key=os.environ.get("VINZOR_SCREENING_KEY", ""),
+                           scope=os.environ.get("VINZOR_SCREENING_SCOPE",
+                                                "default")))
+            except ScreeningUnavailable as why:
+                # Silent to the officer and loud in the log. They will see it
+                # on the screen as "nobody has run a watchlist check", which
+                # is true and is the thing they have to act on.
+                print("  onboarding could not screen: %s" % why,
+                      file=sys.stderr)
+            except Exception as broke:      # noqa: BLE001
+                print("  onboarding could not screen: %s: %s"
+                      % (type(broke).__name__, broke), file=sys.stderr)
+
+            from .adversemedia import AdverseMediaUnavailable
+            from .adversemedia import check as read_the_press
+
+            try:
+                read_the_press(engine, party, checked_at=today)
+            except AdverseMediaUnavailable as why:
+                print("  onboarding could not read the press: %s" % why,
+                      file=sys.stderr)
+            except Exception as broke:      # noqa: BLE001
+                print("  onboarding could not read the press: %s: %s"
                       % (type(broke).__name__, broke), file=sys.stderr)
 
         def _onboarding(self, party: str) -> None:
