@@ -1,0 +1,30 @@
+{
+  "generator_version": "1.0.0",
+  "seed": 20260807,
+  "generated_at": "2026-08-07",
+  "counts": {
+    "persons.csv": 120,
+    "companies.csv": 60,
+    "trusts.csv": 15,
+    "funds.csv": 8,
+    "bank_accounts.csv": 180,
+    "fund_participations.csv": 150,
+    "capital_commitments.csv": 150,
+    "capital_calls.csv": 44,
+    "capital_call_allocations.csv": 452,
+    "payments.csv": 805,
+    "portfolio_companies.csv": 25,
+    "documents.csv": 150,
+    "sanctions_entries.csv": 100,
+    "pep_entries.csv": 80,
+    "adverse_media.csv": 50,
+    "alerts.csv": 34,
+    "cases.csv": 28,
+    "regulatory_reports.csv": 4,
+    "edges.csv": 153
+  },
+  "edges": 153,
+  "ubochains": 3,
+  "disclaimer": "All records are entirely synthetic and invented.",
+  "hash": "6858d13093d896f97744eff28e0c6487f500805de20d4effe6daaf7b6bf919a9"
+}

@@ -1,0 +1,3 @@
+{"id": "own-1", "schema": "Person", "properties": {"name": ["Rajat Kishore Malhotra"], "nationality": ["in"], "notes": ["Application refused 2025. Do not onboard without senior sign-off."]}}
+{"id": "own-2", "schema": "Company", "properties": {"name": ["Sandalwood Trustees Private Limited"], "jurisdiction": ["in"], "notes": ["Related party. Every payment needs a second look."]}}
+{"id": "own-3", "schema": "Person", "properties": {"name": ["Priya Raghavan"], "nationality": ["in"], "notes": ["Funded from three unrelated accounts in August 2026."]}}

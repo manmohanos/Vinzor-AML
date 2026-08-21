@@ -1,0 +1,11 @@
+# Documents are evidence, and evidence is bytes. Line-ending conversion
+# would rewrite them on checkout and change the fingerprint the log
+# records -- which is the one thing a document store must not do.
+*.pdf  binary
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.tif  binary
+*.tiff binary
+*.xlsx binary
+*.db   binary

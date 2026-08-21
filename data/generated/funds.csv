@@ -1,0 +1,9 @@
+id,fund_name,fund_type,vehicle_jurisdiction,gifsc_resident_flag,strategy,vintage_year,target_size,currency,nav_currency
+fnd_0001,Cascade Partners I,AIF,IN-GIFT,1,Buyout,2025,328000000,USD,USD
+fnd_0002,Atlas Fund II,AIF,IN-GIFT,1,Real estate,2023,186000000,USD,USD
+fnd_0003,Quantum Growth Fund III,Private Credit,IN-GIFT,1,Infrastructure,2020,253000000,USD,USD
+fnd_0004,Apex Growth Fund IV,Hedge,IN-GIFT,1,Venture debt,2022,260000000,USD,USD
+fnd_0005,Dynamic Fund I,PE,IN-GIFT,1,Real estate,2025,452000000,USD,USD
+fnd_0006,Vertex Capital II,PE,IN-GIFT,1,Early-stage venture,2024,384000000,USD,USD
+fnd_0007,Dynamic Capital III,AIF,IN-GIFT,1,Infrastructure,2022,241000000,USD,USD
+fnd_0008,Dynamic Capital IV,VC,IN-GIFT,1,Buyout,2021,428000000,USD,USD

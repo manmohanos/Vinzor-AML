@@ -1,0 +1,71 @@
+[
+  {
+    "target_entity": "cmp_0006",
+    "resolved_at": "2026-07-08",
+    "chain": [
+      {
+        "from": "cmp_0006",
+        "relation": "OWNS",
+        "to": "cmp_0005",
+        "percentage": 70
+      },
+      {
+        "from": "cmp_0005",
+        "relation": "OWNS",
+        "to": "cmp_0004",
+        "percentage": 80
+      },
+      {
+        "from": "cmp_0004",
+        "relation": "OWNS",
+        "to": "per_0001",
+        "percentage": 100
+      }
+    ],
+    "effective_ubo": "per_0001",
+    "ultimate_percentage": 56.0,
+    "conclusion": "single_ubo"
+  },
+  {
+    "target_entity": "trs_0001",
+    "resolved_at": "2026-07-26",
+    "chain": [
+      {
+        "from": "trs_0001",
+        "relation": "BENEFICIARY_OF",
+        "to": "per_0045",
+        "percentage": 24
+      }
+    ],
+    "effective_ubo": null,
+    "ultimate_percentage": null,
+    "conclusion": "no_single_ubo_over_25pct"
+  },
+  {
+    "target_entity": "cmp_0001",
+    "resolved_at": "2026-07-18",
+    "chain": [
+      {
+        "from": "cmp_0001",
+        "relation": "OWNS",
+        "to": "cmp_0002",
+        "percentage": 40
+      },
+      {
+        "from": "cmp_0002",
+        "relation": "OWNS",
+        "to": "cmp_0003",
+        "percentage": 50
+      },
+      {
+        "from": "cmp_0003",
+        "relation": "OWNS",
+        "to": "cmp_0001",
+        "percentage": 30
+      }
+    ],
+    "effective_ubo": null,
+    "ultimate_percentage": null,
+    "conclusion": "ownership_cycle_detected"
+  }
+]

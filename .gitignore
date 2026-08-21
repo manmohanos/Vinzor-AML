@@ -1,0 +1,33 @@
+# A workspace is a live compliance record. It never belongs in version control.
+*.db
+# WAL mode writes two sidecars beside the workspace, and the -wal file holds
+# committed records that are not in the .db yet. Ignoring the .db alone would
+# leak the very records it is there to keep out.
+*.db-wal
+*.db-shm
+*.log
+
+# An evidence pack is the workspace again, in another format: record.jsonl
+# holds every party, payment and decision. Ignoring only *.db would let the
+# export feature walk the same records straight past that rule -- which it did
+# once, on 14 August 2026, until someone looked at what was tracked.
+evidence-pack/
+*-evidence-pack/
+record.jsonl
+
+# Secrets are read from the environment, never from a file. This is a backstop:
+# a credential committed once stays in the history forever, even after deletion.
+# .env.example is the one deliberate exception: it holds no real values, only
+# the variable names and how to get them, and is meant to be tracked.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+settings.local.json
+
+__pycache__/
+.pytest_cache/
+
+# Screenshots are a working aid, not a deliverable.
+.shots/

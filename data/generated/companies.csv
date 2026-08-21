@@ -1,0 +1,61 @@
+id,legal_name,jurisdiction,registration_number,country_of_incorporation,industry,is_shell,is_listed,address,risk_score,status
+cmp_0001,Orion Zenith Enterprises,KY,REG-CMP_0001-711672,JP,Pharmaceuticals,1,0,"640 Example Street, North Korea",82,ACTIVE
+cmp_0002,Dynamic Dynamic Trading,KY,REG-CMP_0002-751879,JP,Infrastructure,1,0,"268 Example Street, Japan",82,ACTIVE
+cmp_0003,Pinnacle Harbor Trading,KY,REG-CMP_0003-895050,LU,Pharmaceuticals,1,0,"714 Example Street, Canada",82,ACTIVE
+cmp_0004,Vertex Nimbus Holdings,KY,REG-CMP_0004-428330,LU,Infrastructure,1,0,"113 Example Street, United Arab Emirates",82,ACTIVE
+cmp_0005,Beacon Clarity Luxembourg S.à r.l.,KY,REG-CMP_0005-128393,SG,Infrastructure,1,0,"174 Example Street, Mauritius",82,ACTIVE
+cmp_0006,Solstice Dynamic Luxembourg S.à r.l.,KY,REG-CMP_0006-984142,CA,Telecom,1,0,"389 Example Street, Cuba",82,ACTIVE
+cmp_0007,Dynamic Vertex Pte. Ltd.,US,REG-CMP_0007-291643,JP,Real estate,0,1,"305 Example Street, India",65,ACTIVE
+cmp_0008,Everest Clarity B.V.,GB,REG-CMP_0008-557198,IN,Pharmaceuticals,0,1,"586 Example Street, France",61,ACTIVE
+cmp_0009,Pinnacle Vertex Ventures,SG,REG-CMP_0009-682135,IN,Telecom,0,0,"995 Example Street, United States",60,ACTIVE
+cmp_0010,Meridian Zenith Luxembourg S.à r.l.,SG,REG-CMP_0010-432492,FR,Consumer,0,0,"768 Example Street, Netherlands",60,ACTIVE
+cmp_0011,Atlas Solstice Holdings,IR,REG-CMP_0011-900264,CA,Telecom,0,0,"916 Example Street, France",48,ACTIVE
+cmp_0012,Meridian Atlas Investments,JP,REG-CMP_0012-994579,JP,Technology,0,0,"507 Example Street, Cuba",60,ACTIVE
+cmp_0013,Dynamic Apex Advisors,KP,REG-CMP_0013-523750,FR,Real estate,0,0,"655 Example Street, Luxembourg",30,ACTIVE
+cmp_0014,Crest Lumina Investments,LU,REG-CMP_0014-539828,SG,Healthcare,0,0,"361 Example Street, United Kingdom",41,ACTIVE
+cmp_0015,Vantage Meridian Trading,FR,REG-CMP_0015-831356,AE,Infrastructure,0,1,"295 Example Street, Syria",54,ACTIVE
+cmp_0016,Summit Cascade Investments,CA,REG-CMP_0016-440659,NL,Consumer,0,0,"348 Example Street, United Kingdom",51,ACTIVE
+cmp_0017,Pinnacle Solstice International,SD,REG-CMP_0017-923182,US,Real estate,1,0,"6 Example Street, France",60,ACTIVE
+cmp_0018,Clarity Lumina Investments,SG,REG-CMP_0018-362257,SG,Manufacturing,0,0,"507 Example Street, Singapore",63,ACTIVE
+cmp_0019,Everest Crest B.V.,SD,REG-CMP_0019-725963,SG,Pharmaceuticals,0,0,"848 Example Street, Luxembourg",49,ACTIVE
+cmp_0020,Dynamic Harbor Ventures,SG,REG-CMP_0020-156555,SG,Telecom,0,0,"794 Example Street, United Kingdom",59,ACTIVE
+cmp_0021,Nimbus Solstice Limited,SY,REG-CMP_0021-936369,MU,Telecom,1,1,"861 Example Street, Cuba",68,ACTIVE
+cmp_0022,Lumina Atlas International,IN,REG-CMP_0022-878907,AE,Pharmaceuticals,0,0,"969 Example Street, Japan",36,ACTIVE
+cmp_0023,Orion Vertex Enterprises,MM,REG-CMP_0023-480474,AE,Consumer,0,1,"84 Example Street, France",34,ACTIVE
+cmp_0024,Cascade Apex Holdings,US,REG-CMP_0024-957087,NL,Technology,0,0,"101 Example Street, United Kingdom",52,ACTIVE
+cmp_0025,Harbor Quantum Investments,IR,REG-CMP_0025-377889,NL,Consumer,0,0,"764 Example Street, Iran",34,ACTIVE
+cmp_0026,Solstice Summit Investments,CA,REG-CMP_0026-572543,GB,Energy,0,0,"787 Example Street, Japan",52,ACTIVE
+cmp_0027,Solstice Vantage Partners,LU,REG-CMP_0027-374707,SG,Manufacturing,1,0,"996 Example Street, Syria",73,ACTIVE
+cmp_0028,Summit Harbor Investments,FR,REG-CMP_0028-120845,IN,Infrastructure,0,0,"279 Example Street, Japan",54,ACTIVE
+cmp_0029,Quantum Orion Private Limited,AE,REG-CMP_0029-810857,AE,Pharmaceuticals,0,0,"16 Example Street, Netherlands",64,ACTIVE
+cmp_0030,Meridian Lumina B.V.,MM,REG-CMP_0030-879141,SG,Manufacturing,1,0,"490 Example Street, North Korea",71,ACTIVE
+cmp_0031,Orion Orion Ventures,SD,REG-CMP_0031-826727,SG,Energy,1,0,"507 Example Street, Sudan",85,ACTIVE
+cmp_0032,Crest Nimbus Limited,SY,REG-CMP_0032-650767,GB,Healthcare,0,0,"66 Example Street, Germany",47,ACTIVE
+cmp_0033,Orion Vantage Partners,CU,REG-CMP_0033-884595,MU,Manufacturing,0,0,"603 Example Street, North Korea",60,ACTIVE
+cmp_0034,Quantum Solstice B.V.,SG,REG-CMP_0034-673902,GB,Real estate,0,0,"327 Example Street, Singapore",30,ACTIVE
+cmp_0035,Atlas Apex Limited,US,REG-CMP_0035-327255,DE,Technology,0,0,"358 Example Street, North Korea",63,ACTIVE
+cmp_0036,Beacon Atlas Luxembourg S.à r.l.,MM,REG-CMP_0036-121396,FR,Consumer,0,0,"287 Example Street, United Kingdom",51,ACTIVE
+cmp_0037,Clarity Vantage Limited,US,REG-CMP_0037-839486,MU,Telecom,0,0,"900 Example Street, Luxembourg",43,ACTIVE
+cmp_0038,Dynamic Harbor Limited,CU,REG-CMP_0038-572014,SG,Infrastructure,0,0,"528 Example Street, United Kingdom",47,ACTIVE
+cmp_0039,Vertex Orion Ventures,IN,REG-CMP_0039-559834,AE,Real estate,0,1,"413 Example Street, France",33,ACTIVE
+cmp_0040,Nimbus Beacon B.V.,SG,REG-CMP_0040-861449,SG,Energy,0,0,"88 Example Street, Netherlands",33,ACTIVE
+cmp_0041,Beacon Vantage Pte. Ltd.,FR,REG-CMP_0041-114870,LU,Financial services,1,0,"465 Example Street, United Arab Emirates",89,ACTIVE
+cmp_0042,Quantum Apex Holdings,MU,REG-CMP_0042-642106,CA,Financial services,1,0,"890 Example Street, Germany",62,ACTIVE
+cmp_0043,Pinnacle Everest Trading,LU,REG-CMP_0043-410722,MU,Pharmaceuticals,0,0,"868 Example Street, Iran",37,ACTIVE
+cmp_0044,Summit Atlas Private Limited,IN,REG-CMP_0044-572401,MU,Healthcare,0,0,"730 Example Street, Canada",64,ACTIVE
+cmp_0045,Vertex Harbor Group,CA,REG-CMP_0045-417725,NL,Manufacturing,0,0,"350 Example Street, Singapore",36,ACTIVE
+cmp_0046,Apex Cascade Group,CA,REG-CMP_0046-262150,CA,Telecom,0,0,"439 Example Street, Mauritius",46,ACTIVE
+cmp_0047,Apex Pinnacle Investments,AE,REG-CMP_0047-140208,AE,Consumer,1,0,"216 Example Street, Cuba",74,ACTIVE
+cmp_0048,Atlas Dynamic Trading,FR,REG-CMP_0048-105757,US,Real estate,0,0,"273 Example Street, India",55,ACTIVE
+cmp_0049,Beacon Clarity Ventures,LU,REG-CMP_0049-381906,US,Healthcare,0,0,"708 Example Street, Netherlands",59,ACTIVE
+cmp_0050,Nimbus Orion Group,NL,REG-CMP_0050-429778,SG,Healthcare,0,0,"979 Example Street, Myanmar",63,ACTIVE
+cmp_0051,Harbor Solstice Pte. Ltd.,US,REG-CMP_0051-760307,IN,Telecom,0,0,"493 Example Street, United States",39,ACTIVE
+cmp_0052,Dynamic Dynamic Private Limited,DE,REG-CMP_0052-916257,GB,Healthcare,1,0,"646 Example Street, Iran",70,ACTIVE
+cmp_0053,Solstice Vertex Limited,CA,REG-CMP_0053-195519,US,Consumer,0,0,"462 Example Street, Netherlands",52,ACTIVE
+cmp_0054,Crest Clarity Capital,SG,REG-CMP_0054-923549,JP,Manufacturing,0,0,"443 Example Street, France",37,ACTIVE
+cmp_0055,Clarity Vantage Limited,JP,REG-CMP_0055-720445,SG,Consumer,0,0,"809 Example Street, North Korea",57,ACTIVE
+cmp_0056,Meridian Quantum Investments,SY,REG-CMP_0056-684139,AE,Technology,0,1,"368 Example Street, India",54,ACTIVE
+cmp_0057,Dynamic Vantage Group,SG,REG-CMP_0057-764085,GB,Healthcare,0,0,"809 Example Street, Cuba",39,ACTIVE
+cmp_0058,Zenith Everest Limited,JP,REG-CMP_0058-261108,FR,Pharmaceuticals,1,0,"611 Example Street, Syria",82,ACTIVE
+cmp_0059,Zenith Lumina Partners,IR,REG-CMP_0059-889182,SG,Infrastructure,0,0,"993 Example Street, Sudan",43,ACTIVE
+cmp_0060,Vertex Summit Limited,KP,REG-CMP_0060-656866,JP,Technology,1,0,"295 Example Street, North Korea",78,ACTIVE

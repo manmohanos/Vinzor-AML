@@ -1,0 +1,8 @@
+Value Date,Remitter Name,Beneficiary,Amount,Currency,UTR No,Narration
+2026-08-12,Anand Bhat,Kesari Holdings Pte Ltd,6200000,INR,UTR91101,NEFT CR advisory fee
+2026-08-13,Kesari Holdings Pte Ltd,Blue Harbour Nominees,6150000,INR,UTR91102,NEFT CR intercompany
+2026-08-14,Blue Harbour Nominees,Anand Bhat,6100000,INR,UTR91103,NEFT CR capital call
+2026-08-12,Rohit Menon,Sandalwood Trustees,4800000,INR,UTR91201,NEFT CR settlement
+2026-08-13,Sandalwood Trustees,Meridian Family Office,4780000,INR,UTR91202,NEFT CR onward
+2026-08-14,Meridian Family Office,Lakshmi Iyer,4750000,INR,UTR91203,NEFT CR onward
+2026-08-15,Lakshmi Iyer,Tobias Lindqvist,4700000,INR,UTR91204,NEFT CR capital call

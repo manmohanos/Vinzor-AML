@@ -1,0 +1,51 @@
+id,entity_name,headline,article_date,source_url,category,severity
+adm_0001,Raj Kapoor,Insider Trading probe reported,2024-05-16,https://news.example.com/article/0,CORRUPTION,Medium
+adm_0002,Vantage Orion Ventures,Corruption probe reported,2024-05-21,https://news.example.com/article/1,SANCTIONS,High
+adm_0003,Emily Kapoor,Corruption probe reported,2026-07-13,https://news.example.com/article/2,FRAUD,Low
+adm_0004,Solstice Meridian Partners,Money Laundering probe reported,2025-12-29,https://news.example.com/article/3,INSIDER_TRADING,Medium
+adm_0005,Michael Verma,Insider Trading probe reported,2024-07-26,https://news.example.com/article/4,TAX_EVASION,Low
+adm_0006,Ananya Hussain,Corruption probe reported,2025-02-09,https://news.example.com/article/5,CORRUPTION,Medium
+adm_0007,Clarity Pinnacle Private Limited,Fraud probe reported,2026-01-04,https://news.example.com/article/6,INSIDER_TRADING,Medium
+adm_0008,Apex Atlas Partners,Corruption probe reported,2025-01-23,https://news.example.com/article/7,SANCTIONS,Low
+adm_0009,Crest Vantage Trading,Insider Trading probe reported,2024-04-24,https://news.example.com/article/8,TAX_EVASION,Low
+adm_0010,Kavya Desai,Insider Trading probe reported,2024-09-01,https://news.example.com/article/9,SANCTIONS,High
+adm_0011,Varun Johnson,Fraud probe reported,2024-08-15,https://news.example.com/article/10,TAX_EVASION,High
+adm_0012,Apex Zenith Luxembourg S.à r.l.,Fraud probe reported,2025-09-06,https://news.example.com/article/11,FRAUD,Medium
+adm_0013,Beacon Quantum Investments,Tax Evasion probe reported,2026-04-01,https://news.example.com/article/12,MONEY_LAUNDERING,Medium
+adm_0014,Summit Nimbus Advisors,Fraud probe reported,2024-11-23,https://news.example.com/article/13,SANCTIONS,Low
+adm_0015,Siddharth Mehta,Sanctions probe reported,2024-11-12,https://news.example.com/article/14,TAX_EVASION,Medium
+adm_0016,Siddharth Jackson,Sanctions probe reported,2026-03-18,https://news.example.com/article/15,FRAUD,Medium
+adm_0017,Raj Hussain,Insider Trading probe reported,2026-02-23,https://news.example.com/article/16,FRAUD,Medium
+adm_0018,Hannah Desai,Corruption probe reported,2024-06-20,https://news.example.com/article/17,SANCTIONS,Low
+adm_0019,Lucas Anderson,Corruption probe reported,2024-06-15,https://news.example.com/article/18,TAX_EVASION,Medium
+adm_0020,Arjun Miller,Money Laundering probe reported,2025-04-11,https://news.example.com/article/19,MONEY_LAUNDERING,Medium
+adm_0021,Harbor Lumina Trading,Fraud probe reported,2026-05-09,https://news.example.com/article/20,TAX_EVASION,Low
+adm_0022,Mei Malhotra,Money Laundering probe reported,2025-04-12,https://news.example.com/article/21,INSIDER_TRADING,High
+adm_0023,Karan Rao,Fraud probe reported,2025-06-22,https://news.example.com/article/22,TAX_EVASION,Medium
+adm_0024,Crest Orion Ventures,Tax Evasion probe reported,2025-08-30,https://news.example.com/article/23,SANCTIONS,Low
+adm_0025,Atlas Apex Partners,Corruption probe reported,2024-08-09,https://news.example.com/article/24,SANCTIONS,High
+adm_0026,Vertex Meridian Pte. Ltd.,Money Laundering probe reported,2024-08-31,https://news.example.com/article/25,CORRUPTION,High
+adm_0027,Zoya Chen,Fraud probe reported,2024-03-08,https://news.example.com/article/26,INSIDER_TRADING,High
+adm_0028,Clarity Cascade International,Money Laundering probe reported,2025-11-25,https://news.example.com/article/27,INSIDER_TRADING,Low
+adm_0029,Daniel Mehta,Tax Evasion probe reported,2025-07-12,https://news.example.com/article/28,INSIDER_TRADING,Low
+adm_0030,Ishaan Davis,Corruption probe reported,2024-05-14,https://news.example.com/article/29,FRAUD,Low
+adm_0031,Hiro Verma,Insider Trading probe reported,2025-08-25,https://news.example.com/article/30,MONEY_LAUNDERING,High
+adm_0032,Naina Jackson,Corruption probe reported,2024-12-12,https://news.example.com/article/31,MONEY_LAUNDERING,Medium
+adm_0033,Kavya Desai,Tax Evasion probe reported,2024-11-12,https://news.example.com/article/32,INSIDER_TRADING,High
+adm_0034,Layla Ghosh,Insider Trading probe reported,2024-12-27,https://news.example.com/article/33,SANCTIONS,Medium
+adm_0035,Quantum Vertex Investments,Insider Trading probe reported,2024-02-24,https://news.example.com/article/34,MONEY_LAUNDERING,Medium
+adm_0036,Vertex Lumina Ventures,Sanctions probe reported,2025-01-27,https://news.example.com/article/35,INSIDER_TRADING,Medium
+adm_0037,Cascade Meridian Group,Sanctions probe reported,2025-02-05,https://news.example.com/article/36,FRAUD,Medium
+adm_0038,Beacon Cascade Advisors,Insider Trading probe reported,2025-10-10,https://news.example.com/article/37,FRAUD,High
+adm_0039,Apex Cascade Partners,Insider Trading probe reported,2025-07-09,https://news.example.com/article/38,INSIDER_TRADING,Medium
+adm_0040,Zenith Clarity Luxembourg S.à r.l.,Money Laundering probe reported,2025-07-31,https://news.example.com/article/39,SANCTIONS,High
+adm_0041,Dynamic Meridian Partners,Corruption probe reported,2025-12-14,https://news.example.com/article/40,TAX_EVASION,High
+adm_0042,Quantum Lumina Trading,Fraud probe reported,2025-05-12,https://news.example.com/article/41,CORRUPTION,High
+adm_0043,Fatima Sharma,Fraud probe reported,2024-09-01,https://news.example.com/article/42,FRAUD,Low
+adm_0044,Chen Iyer,Money Laundering probe reported,2025-01-02,https://news.example.com/article/43,TAX_EVASION,Low
+adm_0045,Zenith Harbor Limited,Insider Trading probe reported,2026-02-26,https://news.example.com/article/44,CORRUPTION,Medium
+adm_0046,Crest Clarity Pte. Ltd.,Corruption probe reported,2024-10-01,https://news.example.com/article/45,TAX_EVASION,Medium
+adm_0047,Nimbus Apex Advisors,Money Laundering probe reported,2024-05-12,https://news.example.com/article/46,FRAUD,High
+adm_0048,Solstice Solstice Pte. Ltd.,Sanctions probe reported,2024-09-03,https://news.example.com/article/47,MONEY_LAUNDERING,High
+adm_0049,Arjun Hussain,Insider Trading probe reported,2026-05-24,https://news.example.com/article/48,MONEY_LAUNDERING,Low
+adm_0050,Ahmed Gupta,Tax Evasion probe reported,2025-03-20,https://news.example.com/article/49,CORRUPTION,Medium

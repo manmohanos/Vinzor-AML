@@ -1,0 +1,16 @@
+id,trust_name,jurisdiction,trust_deed_date,settlor_count,trustee_count,has_protector,is_discretionary,has_beneficiary_class,trust_type,risk_score
+trs_0001,Crest Settlor Trust,GG,2004-12-07,2,3,0,1,1,Fixed,75
+trs_0002,Krishna Family Trust,GG,2014-09-04,2,2,0,1,1,Discretionary,74
+trs_0003,Crest Settlor Trust,AE,2013-08-07,2,3,0,1,1,Charitable,58
+trs_0004,Krishna Family Trust,AE,2007-01-22,1,1,0,0,1,Revocable,73
+trs_0005,Sovereign Succession Trust,KY,2013-11-08,2,2,0,1,1,Fixed,77
+trs_0006,Harbor Beneficiary Trust,KY,2008-04-24,2,3,0,1,1,Charitable,60
+trs_0007,Sovereign Succession Trust,AE,2002-10-04,2,2,1,1,1,Discretionary,51
+trs_0008,Harbor Beneficiary Trust,MU,2017-03-26,2,3,0,1,1,Charitable,52
+trs_0009,Harbor Beneficiary Trust,KY,2019-07-09,2,3,1,1,1,Revocable,47
+trs_0010,Sovereign Succession Trust,GG,2008-06-24,2,1,0,1,1,Discretionary,63
+trs_0011,Harbor Beneficiary Trust,GG,2012-05-02,2,2,0,1,1,Charitable,71
+trs_0012,Sovereign Succession Trust,KY,2015-02-12,1,2,1,0,1,Charitable,61
+trs_0013,Meridian Growth Trust,KY,2018-07-03,1,3,1,1,1,Charitable,71
+trs_0014,Sovereign Succession Trust,GG,2018-09-20,2,2,1,0,1,Discretionary,54
+trs_0015,Anand Discretionary Trust,AE,2012-10-16,1,1,0,1,1,Discretionary,66

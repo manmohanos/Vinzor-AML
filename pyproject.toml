@@ -1,0 +1,40 @@
+[project]
+name = "vinzor"
+version = "0.1.0"
+description = "Compliance infrastructure for fund managers regulated by IFSCA in GIFT City"
+readme = "README.md"
+requires-python = ">=3.11"
+# Deliberately empty, and it is a design rule rather than an accident:
+# AGENTS.md forbids a dependency in the core, so there is nothing here to
+# install, pin, audit or be abandoned by. Adapters at the boundary may take
+# one when ECOSYSTEM.md justifies it; if that ever happens it goes in an
+# optional group below, never here.
+dependencies = []
+
+[project.scripts]
+vinzor = "vinzor.__main__:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["vinzor*"]
+
+[tool.setuptools.package-data]
+vinzor = ["web/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Tests that call the real model over the network. Kept out of the ordinary
+# run because a suite that needs a credential and a working connection is a
+# suite that fails for reasons the code did not cause -- not because the
+# calls are precious. Run them with: pytest -m live
+markers = [
+    "live: talks to the deployed model; needs Azure configured",
+]
+addopts = "-m 'not live'"
+pythonpath = [".", "tests"]

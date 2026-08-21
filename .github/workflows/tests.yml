@@ -1,0 +1,57 @@
+name: tests
+
+# The suite is the only thing holding the twelve invariants in DESIGN.md in
+# place. Until now it protected the project when somebody remembered to run
+# it; here it protects every change, and every future contributor, whether
+# they remember or not.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor stated in pyproject.toml, and current. Nothing in between
+        # is worth the minutes: the core imports only the standard library.
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        # No dependencies to resolve -- that is the point of the zero-dependency
+        # rule -- so this is pytest and nothing else.
+        run: python -m pip install --upgrade pip pytest
+      - name: Run the suite
+        run: python -m pytest -q
+      - name: Walk the whole chain over the sample dataset
+        # A green suite with a broken demo would still be a broken product:
+        # this proves the hash chain verifies and replay reproduces live state.
+        run: python -m vinzor
+
+      - name: Measure what the rules catch and what they cost
+        # Five scripts under tools/ that measure behaviour the suite cannot:
+        # what the typology shapes look like from the outside, what an
+        # ordinary book costs in false positives, whether a frozen ownership
+        # answer has moved. All five are byte-deterministic, need nothing but
+        # the standard library, and together run in about five seconds.
+        #
+        # They were not here, and adding them would have achieved nothing:
+        # each ended in a bare `return 0`, so a simulated total detection
+        # failure printed "0 of 7 shapes are recognised as shapes" and exited
+        # clean. Each now has a floor written down in the file, with the date
+        # it was measured, and returns 1 below it. A build that goes green on
+        # a number nobody checked is worse than no build, because it is read
+        # as evidence.
+        run: |
+          python tools/typologies.py
+          python tools/duplicate_shapes.py
+          python tools/adversarial.py
+          python tools/ordinary_traffic.py
+          python tools/ownership_spec.py
+          python tools/benchmark.py

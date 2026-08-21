@@ -1,0 +1,38 @@
+# What our self-hosted yente indexes.
+#
+# Scope "default" is OpenSanctions' full consolidated collection: every
+# sanctions list (UN, OFAC, EU, UK and the rest), every published PEP list,
+# criminal watchlists, debarment and disqualification registers, and wanted
+# lists — 250+ sources, merged and deduplicated. The narrower "sanctions"
+# scope remains a sub-collection, so anything that asks to screen against
+# sanctions only still can: widening the index loses nothing.
+#
+# Licence note, stated once and plainly: the OpenSanctions bulk data is
+# CC-BY-NC — free for evaluation and internal research, which is what this is.
+# Commercial use of the data requires a data licence from OpenSanctions. The
+# software (yente) is MIT.
+catalogs:
+  - url: "https://data.opensanctions.org/datasets/latest/index.json"
+    scope: default
+    resource_name: entities.ftm.json
+
+# A firm's own list, indexed beside the public ones so one search answers
+# both questions. Every FME keeps one -- applicants refused before, related
+# parties, names a correspondent bank has asked about -- and "can it screen
+# our own list too" is a question a buyer asks in the first meeting.
+#
+# Proven on this machine 19 August 2026: three entities indexed as
+# `yente-entities-own_list-...`, searchable at /search/own_list, and they
+# survived a full reindex of the four million public ones.
+#
+# Two things learned doing it, so nobody rediscovers them:
+#  * `entities_url` over the same loopback HTTP the manifest already uses.
+#    yente fetches these with an HTTP client that reads "C:/..." as a URL
+#    scheme, so a Windows `path:` breaks exactly as the manifest path did.
+#  * `version` is what triggers re-indexing. Change the file without
+#    changing the version and yente keeps serving the old contents.
+datasets:
+  - name: own_list
+    title: This firm's own list
+    entities_url: "http://127.0.0.1:8777/own-list.json"
+    version: "20260819001"
