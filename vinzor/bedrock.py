@@ -87,12 +87,25 @@ INDIA_REGIONS = frozenset({"ap-south-1", "ap-south-2"})
 #: anybody can put in front of a regulator.
 ROUTING_PREFIXES = ("apac.", "global.", "us.", "eu.", "us-gov.", "ca.", "au.")
 
-#: The default model, chosen on availability rather than preference. Every
-#: Anthropic model in ap-south-1 is inference-profile-only, so Claude is
-#: unreachable under the residency rule above. This one runs on demand,
-#: pinned to Mumbai, and answered a strict-JSON instruction cleanly when the
-#: candidates were measured. Override with VINZOR_BEDROCK_MODEL.
-DEFAULT_MODEL = "qwen.qwen3-235b-a22b-2507-v1:0"
+#: The default model. Chosen by measurement, and the measurement is the only
+#: reason it is this one rather than the first that answered.
+#:
+#: Every Anthropic model in ap-south-1 is inference-profile-only, so Claude is
+#: unreachable under the residency rule above and the choice is between what
+#: runs on demand in Mumbai. Three do. On 22 August 2026, against the reader
+#: flow in ``ask.py`` and the drafting flow in ``assist.py``:
+#:
+#:     mistral.mistral-large-3-675b-instruct   reader 6/6   drafts 3/3   1.8s
+#:     deepseek.v3.2                           reader 5/6   drafts 3/3   2.2s
+#:     qwen.qwen3-235b-a22b-2507-v1:0          reader 1/4   drafts 3/3
+#:
+#: The qwen figure is the point. It was the default first, chosen because it
+#: returned clean JSON to a one-line prompt -- and then failed three questions
+#: in four on the real reader prompt, replying in prose with no JSON object in
+#: it at all. A model that follows a simple instruction is not a model that
+#: follows a hard one, and the difference does not show up until the whole
+#: flow is run. Override with VINZOR_BEDROCK_MODEL.
+DEFAULT_MODEL = "mistral.mistral-large-3-675b-instruct"
 
 #: US dollars per thousand tokens. **These are placeholders and are meant to
 #: be set.** Bedrock prices per model and the figure moves; a cap computed

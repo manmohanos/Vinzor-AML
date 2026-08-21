@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime
 import json
 import urllib.error
+from typing import Mapping
 
 import pytest
 
@@ -357,3 +358,48 @@ def test_the_clock_has_no_default_because_this_module_may_not_read_one():
     """If a default ever appears, the doctrine has been quietly dropped."""
     with pytest.raises(TypeError):
         drafter(env=env(), http=answer()[0])  # type: ignore[call-arg]
+
+
+# -- against the deployed model ----------------------------------------------
+#
+# Kept out of the ordinary run behind `pytest -m live`, for the reason
+# pyproject.toml gives: a suite that needs a credential and a working
+# connection fails for reasons the code did not cause.
+
+
+@pytest.mark.live
+def test_the_configured_model_can_actually_follow_the_reader_prompt():
+    """The one thing the offline tests cannot tell you.
+
+    The first default was picked because it returned clean JSON to a
+    one-line prompt, and it then failed three questions in four on the real
+    reader prompt -- replying in prose, with no JSON object in it at all.
+    A model that follows a simple instruction is not a model that follows a
+    hard one, and nothing above the transport can rescue a reply that has no
+    object in it to parse.
+
+    So the check is the whole flow against the model actually configured,
+    not a canned response: whatever is set in VINZOR_BEDROCK_MODEL has to
+    answer the shape ``ask.py`` asks for.
+    """
+    from vinzor.__main__ import _load_dotenv
+
+    _load_dotenv()
+    if not configured():
+        pytest.skip("Bedrock is not configured in this environment")
+
+    import datetime as _dt
+
+    from vinzor.ask import bedrock_conversation
+
+    talk = bedrock_conversation(now=lambda: _dt.datetime.now(_dt.timezone.utc))
+    spoken = talk([
+        {"role": "system",
+         "content": 'Reply with one JSON object and nothing else, shaped '
+                    '{"answer": "<a sentence>", "used": []}.'},
+        {"role": "user", "content": "Say that two files are open."},
+    ])
+    assert isinstance(spoken.reply, Mapping)
+    assert "answer" in spoken.reply
+    assert spoken.tokens_in > 0 and spoken.tokens_out > 0
+    assert spoken.region in INDIA_REGIONS
