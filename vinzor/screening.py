@@ -192,7 +192,7 @@ def unusable(url: str) -> str:
     return ""
 
 
-Transport = Callable[[str, bytes, Mapping[str, str]], bytes]
+Transport = Callable[[str, Optional[bytes], Mapping[str, str]], bytes]
 
 #: Bytes. A screening answer is match results for one query; this is far more
 #: than a real one needs and exists only to stop an unbounded read from a peer
@@ -231,8 +231,14 @@ def _read_bounded(response: Any, limit: int) -> bytes:
     return b"".join(chunks)
 
 
-def _http_transport(url: str, body: bytes, headers: Mapping[str, str]) -> bytes:
+def _http_transport(url: str, body: Optional[bytes],
+                    headers: Mapping[str, str]) -> bytes:
     """POST over urllib, with a real wall-clock deadline and a bounded read.
+
+    A body of ``None`` makes it a GET, which is how the catalogue is read.
+    The method follows the body rather than being a second argument, so an
+    injected transport -- a test fake, a retrying client -- keeps working
+    without learning a new parameter.
 
     A socket timeout bounds each individual operation, not the exchange as a
     whole, so the actual call runs on a background thread and this function
@@ -242,7 +248,7 @@ def _http_transport(url: str, body: bytes, headers: Mapping[str, str]) -> bytes:
     reads one.
     """
     request = urllib.request.Request(url, data=body, headers=dict(headers),
-                                     method="POST")
+                                     method="POST" if body is not None else "GET")
     outcome: dict[str, Any] = {}
 
     def run() -> None:
@@ -341,6 +347,55 @@ class WatchlistClient:
     scope: str = DEFAULT_SCOPE
     threshold: float = DEFAULT_THRESHOLD
     transport: Transport = field(default=_http_transport)
+
+    def _refuse_unless_indexed(self) -> None:
+        """Confirm the scope we just searched is actually in the index.
+
+        The protocol publishes what it holds at ``/catalog``: a list of
+        datasets, each with the version indexed and whether that version is
+        the current one. A scope that is absent, or present but not current,
+        is a scope that cannot have been searched -- so an empty answer from
+        it is not a clean record, it is a missing check.
+
+        A service that cannot answer this question at all is also refused.
+        Being unable to tell a clean screen from an unbuilt one is exactly
+        the state in which no clean screen may be written.
+        """
+        try:
+            raw = self.transport(f"{self.url}/catalog", None,
+                                 {"Accept": "application/json"})
+            held = json.loads(raw).get("datasets")
+            if not isinstance(held, list):
+                raise TypeError("catalog was not a list of datasets")
+        except Exception as error:      # noqa: BLE001 - any failure is a refusal
+            raise ScreeningUnavailable(
+                "Nothing matched, and this system could not confirm that the "
+                "watchlist it searched is loaded. That is not the same as a "
+                "clean result, so nothing was recorded."
+            ) from error
+
+        for dataset in held:
+            if not isinstance(dataset, Mapping):
+                continue
+            if str(dataset.get("name") or "") != self.scope:
+                continue
+            if dataset.get("index_current") is False:
+                break
+            return
+
+        # A collection is also reachable as the parent of what is indexed:
+        # "default" is every list at once and is not itself a dataset row on
+        # every deployment. If anything at all is current, the search was
+        # real.
+        if any(isinstance(d, Mapping) and d.get("index_current") for d in held):
+            return
+
+        raise ScreeningUnavailable(
+            "Nothing matched, but the watchlist this system searched is not "
+            "loaded yet, so there was nothing to match against. No check has "
+            "been recorded against this party. Try again once the watchlist "
+            "has finished loading."
+        )
 
     def match(self, *, name: str, kind: EntityKind,
               country: str = "",
@@ -476,6 +531,26 @@ class WatchlistClient:
                 "The screening service answered in a form this system does "
                 "not recognise. Nothing was recorded."
             ) from error
+        if not results:
+            # Nothing came back, and there are two ways that happens: the
+            # index holds four million entities and none of them is this
+            # party, or the index does not hold the scope we asked about at
+            # all. They are opposite facts and the protocol reports both as
+            # an empty list.
+            #
+            # This is the failure the comment thirty lines above calls the
+            # one outcome this module exists to make impossible, reached by
+            # a path nobody had walked: a service that is up, answering,
+            # and simply has not finished building. Found on the deployed
+            # instance during the first index build, when screening every
+            # party would have written a permanent "we checked and found
+            # nothing" against all of them. In an append-only log that
+            # record cannot be taken back.
+            #
+            # So a clean screen has to be earned. Asked only when the
+            # answer is empty, which is the only case where it can be
+            # wrong, so a book with matches in it pays nothing.
+            self._refuse_unless_indexed()
         provenance = {
             "service": self.url,
             "scope": self.scope,

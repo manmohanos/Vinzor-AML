@@ -234,6 +234,11 @@ def test_screening_asks_about_every_name_in_one_request():
     def transport(url, body, headers):
         import json
 
+        if body is None:
+            # The catalogue read. A clean answer is only accepted from a
+            # watchlist the service says it actually holds.
+            return json.dumps({"datasets": [{"name": "default",
+                                             "index_current": True}]}).encode()
         sent.update(json.loads(body))
         return json.dumps({"responses": {key: {"results": []}
                                          for key in sent["queries"]}}).encode()
@@ -254,6 +259,11 @@ def test_the_name_on_the_record_is_not_asked_about_twice():
     def transport(url, body, headers):
         import json
 
+        if body is None:
+            # The catalogue read. A clean answer is only accepted from a
+            # watchlist the service says it actually holds.
+            return json.dumps({"datasets": [{"name": "default",
+                                             "index_current": True}]}).encode()
         sent.update(json.loads(body))
         return json.dumps({"responses": {key: {"results": []}
                                          for key in sent["queries"]}}).encode()
@@ -272,6 +282,11 @@ def test_how_many_names_may_be_asked_about_is_a_stated_limit():
     def transport(url, body, headers):
         import json
 
+        if body is None:
+            # The catalogue read. A clean answer is only accepted from a
+            # watchlist the service says it actually holds.
+            return json.dumps({"datasets": [{"name": "default",
+                                             "index_current": True}]}).encode()
         sent.update(json.loads(body))
         return json.dumps({"responses": {key: {"results": []}
                                          for key in sent["queries"]}}).encode()

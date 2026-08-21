@@ -33,14 +33,29 @@ def service(*results):
     wrong. The fake behaves like the service it stands in for.
     """
     calls = []
+    catalogue = []
 
     def transport(url, body, headers):
+        if body is None:
+            # The catalogue read, which is a GET. A clean answer now has to
+            # be earned: the client asks what the service holds before it
+            # will accept "nothing matched" as a fact about a party, so a
+            # fake that cannot answer this is a fake of a service that is
+            # still loading.
+            # Deliberately not appended to ``calls``: that list means "the
+            # questions this client asked about a party", and every test
+            # indexes into it. A housekeeping GET is not a question.
+            catalogue.append(url)
+            return json.dumps({"datasets": [
+                {"name": "default", "index_current": True},
+            ]}).encode()
         sent = json.loads(body)
         calls.append({"url": url, "body": sent, "headers": dict(headers)})
         answers = {key: {"results": list(results)}
                    for key in (sent.get("queries") or {"q": None})}
         return json.dumps({"responses": answers}).encode()
 
+    transport.catalogue = catalogue
     return transport, calls
 
 
@@ -596,3 +611,110 @@ def test_no_pep_seniority_level_is_invented(engine):
     named = {kind for _, kind in _TOPIC_LISTS}
     assert not any(any(char.isdigit() for char in kind) for kind in named)
     assert "PEP" in named and "PEP_ASSOCIATE" in named
+
+
+# -- a clean screen has to be earned -----------------------------------------
+#
+# Nothing matched has two causes and the protocol reports both as an empty
+# list: the index holds four million entities and none is this party, or the
+# index does not hold the scope at all. They are opposite facts. Found on the
+# deployed instance while the watchlist was still building, when screening the
+# book would have written a permanent "we checked and found nothing" against
+# every party on it -- into a log that has no way to take it back.
+
+
+def unbuilt(datasets):
+    """A service that is up, answering, and has not finished loading."""
+    def transport(url, body, headers):
+        if body is None:
+            return json.dumps({"datasets": datasets}).encode()
+        sent = json.loads(body)
+        return json.dumps({"responses": {k: {"results": []}
+                                         for k in sent["queries"]}}).encode()
+    return transport
+
+
+def test_nothing_matched_against_an_unloaded_watchlist_is_refused(engine):
+    person(engine, "p1", "Rohan Desai")
+    client = WatchlistClient(transport=unbuilt([]), scope="default")
+    with pytest.raises(ScreeningUnavailable) as refusal:
+        screen(engine, "p1", screened_at=WHEN, client=client)
+    assert "not loaded yet" in str(refusal.value)
+
+
+def test_a_refused_check_writes_nothing_at_all(engine):
+    """The whole point. A screening record that was never earned is worse
+    than no record, because the next person to read the file believes it."""
+    person(engine, "p1", "Rohan Desai")
+    before = len(engine.log)
+    client = WatchlistClient(transport=unbuilt([]), scope="default")
+    with pytest.raises(ScreeningUnavailable):
+        screen(engine, "p1", screened_at=WHEN, client=client)
+    assert len(engine.log) == before
+
+
+def test_a_scope_present_but_not_current_is_also_refused(engine):
+    """Mid-rebuild: the dataset is named, and the version indexed is not the
+    one being served."""
+    person(engine, "p1", "Rohan Desai")
+    client = WatchlistClient(
+        transport=unbuilt([{"name": "default", "index_current": False}]),
+        scope="default")
+    with pytest.raises(ScreeningUnavailable):
+        screen(engine, "p1", screened_at=WHEN, client=client)
+
+
+def test_a_loaded_watchlist_still_records_a_clean_screen(engine):
+    """The control. Clause 5.9 evidence is 'we checked and found nothing',
+    so a real clean answer must still become a fact -- this guard must not
+    have turned every clean screen into a refusal."""
+    person(engine, "p1", "Rohan Desai")
+    client = WatchlistClient(
+        transport=unbuilt([{"name": "default", "index_current": True}]),
+        scope="default")
+    results = screen(engine, "p1", screened_at=WHEN, client=client)
+    assert results
+    recorded = [e for e in engine.log
+                if e.event_type is EventType.SCREENING_COMPLETED]
+    assert recorded, "a clean screen is still evidence and must be recorded"
+
+
+def test_a_collection_is_current_when_anything_under_it_is(engine):
+    """'default' is every list at once and is not itself a row on every
+    deployment. If the service holds current data, the search was real."""
+    person(engine, "p1", "Rohan Desai")
+    client = WatchlistClient(
+        transport=unbuilt([{"name": "us_ofac_sdn", "index_current": True}]),
+        scope="default")
+    assert screen(engine, "p1", screened_at=WHEN, client=client)
+
+
+def test_a_service_that_cannot_say_what_it_holds_is_refused(engine):
+    """Being unable to tell a clean screen from an unbuilt one is exactly
+    the state in which no clean screen may be written."""
+    person(engine, "p1", "Rohan Desai")
+
+    def mute(url, body, headers):
+        if body is None:
+            return b"<html>gateway timeout</html>"
+        sent = json.loads(body)
+        return json.dumps({"responses": {k: {"results": []}
+                                         for k in sent["queries"]}}).encode()
+
+    with pytest.raises(ScreeningUnavailable) as refusal:
+        screen(engine, "p1", screened_at=WHEN,
+               client=WatchlistClient(transport=mute))
+    assert "could not confirm" in str(refusal.value)
+
+
+def test_the_catalogue_is_not_read_when_something_matched(engine):
+    """A book with matches in it pays nothing for this guard: the question
+    is only asked where the answer could be wrong."""
+    person(engine, "p1", "Rohan Desai")
+    transport, _calls = service({"id": "ofac-1", "caption": "Rohan Desai",
+                                 "score": 0.95, "match": True,
+                                 "properties": {"topics": ["sanction"]},
+                                 "datasets": ["us_ofac_sdn"]})
+    screen(engine, "p1", screened_at=WHEN,
+           client=WatchlistClient(transport=transport))
+    assert transport.catalogue == [], "asked what it holds despite a match"
