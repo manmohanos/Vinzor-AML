@@ -19,7 +19,20 @@
 
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    # Pinned to the major yente's own client speaks, and 8.x is not it. The
+    # image ships elasticsearch-py 9.4.1, which sends
+    # `Accept: application/vnd.elasticsearch+json; compatible-with=9`, and an
+    # 8.15 server refuses that outright:
+    #
+    #   BadRequestError(400, 'media_type_header_exception',
+    #   'Accept version must be either version 8 or 7, but found 9')
+    #
+    # It fails as a restart loop on yente while Elasticsearch reports itself
+    # green and healthy, so the half that is broken is not the half that is
+    # complaining. Matching the exact patch version is not required -- any 9.x
+    # server accepts a 9 client -- but it is free, and a search index is not
+    # somewhere to discover a compatibility rule twice.
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.1
     environment:
       - discovery.type=single-node
       # No TLS and no auth, because nothing outside this machine can reach it:
