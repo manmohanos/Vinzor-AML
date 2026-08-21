@@ -249,9 +249,8 @@ def build_app(engine: Vinzor, keys=None):
 
         #: The cookie the session token travels in. HttpOnly so a script
         #: cannot read it, SameSite=Strict so another site cannot cause a
-        #: decision to be recorded in somebody's name, and no Secure flag
-        #: only because this serves plain HTTP on loopback -- behind TLS it
-        #: must be added, and the comment in serve() says so.
+        #: decision to be recorded in somebody's name, and Secure whenever
+        #: the reader reached us over TLS -- see ``_over_tls``.
         COOKIE = "vinzor_session"
 
         def _token(self) -> str:
@@ -305,9 +304,42 @@ def build_app(engine: Vinzor, keys=None):
                      or self._query("person") or "")
             return asked or (PEOPLE[0]["name"] if PEOPLE else None)
 
+        def _over_tls(self) -> bool:
+            """Whether the person's browser reached us over HTTPS.
+
+            This process never terminates TLS itself and is not meant to:
+            it binds to loopback and something in front of it -- nginx, and
+            a CDN in front of that -- does the certificate. So the only
+            place the answer can come from is what that proxy tells us,
+            which is ``X-Forwarded-Proto``.
+
+            **Trusting a header a client can set is deliberate here, and it
+            is safe in the only direction that matters.** A stranger who
+            lies and claims HTTPS over a plain connection gets a cookie
+            marked ``Secure``, which their own browser then refuses to send
+            back over that same plain connection: they have locked
+            themselves out, not got in. The failure worth preventing is the
+            opposite one -- omitting ``Secure`` on a connection that really
+            is TLS, so the cookie is willing to travel in the clear -- and
+            no lie in this header can cause that.
+
+            Absent the header we say no, which is right on a laptop: a
+            ``Secure`` cookie on ``http://127.0.0.1`` is one the browser
+            will not return, and a sign-in that silently fails to stick is
+            worse than a demonstration served in the clear.
+            """
+            return (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https"
+
         def _set_cookie(self, token: str, ending: bool = False) -> None:
             bits = [f"{self.COOKIE}={token}", "Path=/", "HttpOnly",
                     "SameSite=Strict"]
+            # Behind TLS the session token must never be willing to travel
+            # in the clear. HttpOnly stops a script reading it and
+            # SameSite=Strict stops another site spending it, but neither
+            # stops it being sent over http:// -- which is the one that
+            # hands it to anybody on the path.
+            if self._over_tls():
+                bits.append("Secure")
             if ending:
                 bits.append("Max-Age=0")
             self._pending_cookie = "; ".join(bits)
@@ -1645,8 +1677,9 @@ def serve(host: str = "127.0.0.1", port: int = 8000,
     print(f"  http://{host}:{port}")
     if keys.anybody_can_sign_in():
         print("  Signing in is required. The session cookie is HttpOnly and")
-        print("  SameSite=Strict; behind TLS it also needs Secure, which is")
-        print("  not set here because this serves plain HTTP on loopback.")
+        print("  SameSite=Strict, and gains Secure on any request a proxy")
+        print("  in front reports as HTTPS. On loopback it does not, because")
+        print("  a Secure cookie is one this browser would never send back.")
     else:
         print("  No password is set, so anybody reaching this port can act")
         print("  as anybody. Fine on a laptop, not for real customer data:")

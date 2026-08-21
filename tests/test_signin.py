@@ -48,13 +48,15 @@ def workspace():
         httpd.server_close()
 
 
-def call(base, path, body=None, cookie="", method=None):
+def call(base, path, body=None, cookie="", method=None, headers=None):
     """(status, payload, set-cookie)."""
     data = json.dumps(body).encode() if body is not None else None
     request = Request(base + path, data=data, method=method,
                       headers={"Content-Type": "application/json"})
     if cookie:
         request.add_header("Cookie", cookie)
+    for name, value in (headers or {}).items():
+        request.add_header(name, value)
     try:
         with urlopen(request, timeout=10) as answer:
             return (answer.status, json.loads(answer.read() or b"{}"),
@@ -179,6 +181,71 @@ def test_signing_in_sets_a_cookie_a_script_cannot_read(workspace):
                                   {"person": "Meera Nair", "password": GOOD})
     assert "HttpOnly" in cookie
     assert "SameSite=Strict" in cookie
+
+
+# -- the cookie behind TLS ---------------------------------------------------
+#
+# HttpOnly stops a script reading the session token and SameSite=Strict stops
+# another site spending it. Neither stops it being sent over http://, which is
+# the one that hands it to whoever is on the path. This process never
+# terminates TLS, so the only thing that knows is the proxy in front.
+
+TLS = {"X-Forwarded-Proto": "https"}
+
+
+def test_the_cookie_is_secure_when_the_proxy_says_the_reader_used_tls(workspace):
+    _engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    _status, _body, cookie = call(base, "/api/sign-in",
+                                  {"person": "Meera Nair", "password": GOOD},
+                                  headers=TLS)
+    assert "Secure" in cookie
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+
+
+def test_the_cookie_is_not_secure_on_plain_loopback(workspace):
+    """A laptop is the case this must not break.
+
+    A ``Secure`` cookie handed out over ``http://127.0.0.1`` is one the
+    browser accepts and then never sends back, so the officer signs in,
+    is told they signed in, and is signed out on the next click. A
+    sign-in that silently fails to stick is worse than one served in
+    the clear and honest about it.
+    """
+    _engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    _status, _body, cookie = call(base, "/api/sign-in",
+                                  {"person": "Meera Nair", "password": GOOD})
+    assert "Secure" not in cookie
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+
+
+def test_the_proxy_may_write_the_scheme_in_any_case(workspace):
+    """Header values are not case-normalised for us, and a proxy that
+    writes HTTPS rather than https must not quietly cost the flag."""
+    _engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    _status, _body, cookie = call(base, "/api/sign-in",
+                                  {"person": "Meera Nair", "password": GOOD},
+                                  headers={"X-Forwarded-Proto": "HTTPS"})
+    assert "Secure" in cookie
+
+
+def test_signing_out_behind_tls_clears_a_secure_cookie_too(workspace):
+    """The cookie that ends the session carries the same flags as the one
+    that began it. A browser matches on name and path rather than on
+    Secure, so this is consistency rather than correctness -- but a
+    sign-out that emits a differently-shaped cookie is the sort of thing
+    that becomes correctness the day a browser tightens the rule."""
+    _engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    _s, _b, cookie = call(base, "/api/sign-in",
+                          {"person": "Meera Nair", "password": GOOD},
+                          headers=TLS)
+    token = cookie.split(";")[0]
+    _s, _b, ending = call(base, "/api/sign-out", {}, cookie=token, headers=TLS)
+    assert "Secure" in ending
+    assert "Max-Age=0" in ending
 
 
 def test_the_token_is_never_stored_in_the_clear(workspace):
