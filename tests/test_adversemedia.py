@@ -97,7 +97,7 @@ def test_a_rate_limit_notice_is_never_an_empty_result(engine):
     person(engine, "p1", "Nirav Modi")
     with pytest.raises(AdverseMediaUnavailable) as refusal:
         check(engine, "p1", checked_at=WHEN,
-              client=NewsClient(transport=news(status=429)))
+              client=NewsClient(transport=news(status=429), wait=0))
     assert "slow down" in str(refusal.value)
 
 
@@ -107,7 +107,7 @@ def test_prose_returned_with_a_200_is_also_refused(engine):
     person(engine, "p1", "Nirav Modi")
     with pytest.raises(AdverseMediaUnavailable):
         check(engine, "p1", checked_at=WHEN,
-              client=NewsClient(transport=news(body=RATE_LIMITED)))
+              client=NewsClient(transport=news(body=RATE_LIMITED), wait=0))
 
 
 def test_a_refused_check_writes_nothing_at_all(engine):
@@ -115,7 +115,7 @@ def test_a_refused_check_writes_nothing_at_all(engine):
     before = len(engine.log)
     with pytest.raises(AdverseMediaUnavailable):
         check(engine, "p1", checked_at=WHEN,
-              client=NewsClient(transport=news(status=429)))
+              client=NewsClient(transport=news(status=429), wait=0))
     assert len(engine.log) == before
 
 
@@ -127,7 +127,7 @@ def test_an_unreachable_service_is_refused_rather_than_reported_clean(engine):
 
     with pytest.raises(AdverseMediaUnavailable):
         check(engine, "p1", checked_at=WHEN,
-              client=NewsClient(transport=dead))
+              client=NewsClient(transport=dead, wait=0))
 
 
 # -- what gets recorded ------------------------------------------------------
@@ -224,3 +224,52 @@ def test_the_file_says_what_was_searched_for(engine):
     assert "searched_for" in detail
     assert "theme:FRAUD" in detail["searched_for"]
     assert sorted(detail["sources"]) == ["bbc.co.uk", "ft.com", "reuters.com"]
+
+
+def test_a_rate_limit_is_retried_a_bounded_number_of_times(engine):
+    """GDELT's limit is shared rather than per-caller, so an ordinary
+    onboarding meets it -- the deployed instance was refused on its first
+    real search. Waiting and asking again is the honest remedy; doing it
+    forever would let a busy service hold an officer indefinitely."""
+    from vinzor.adversemedia import RETRIES
+
+    person(engine, "p1", "Nirav Modi")
+    transport = news(status=429)
+    with pytest.raises(AdverseMediaUnavailable):
+        check(engine, "p1", checked_at=WHEN,
+              client=NewsClient(transport=transport, wait=0))
+    assert len(transport.asked) == RETRIES + 1
+
+
+def test_a_retry_that_succeeds_is_an_ordinary_answer(engine):
+    """The point of retrying at all."""
+    person(engine, "p1", "Nirav Modi")
+    tries = {"n": 0}
+
+    def busy_once(url):
+        tries["n"] += 1
+        if tries["n"] == 1:
+            raise urllib.error.HTTPError(url, 429, "slow down", {}, None)
+        return json.dumps({"articles": [article()]}).encode()
+
+    check(engine, "p1", checked_at=WHEN,
+          client=NewsClient(transport=busy_once, wait=0))
+    written = [e for e in engine.log
+               if e.event_type is EventType.ADVERSE_MEDIA_CHECKED]
+    assert written and written[-1].payload["found"] == 1
+
+
+def test_an_unreachable_service_is_not_retried(engine):
+    """A refusal to slow down is worth waiting out. A host that is not
+    there will not be there in six seconds, and an officer is waiting."""
+    person(engine, "p1", "Nirav Modi")
+    tries = {"n": 0}
+
+    def dead(url):
+        tries["n"] += 1
+        raise TimeoutError("no answer")
+
+    with pytest.raises(AdverseMediaUnavailable):
+        check(engine, "p1", checked_at=WHEN,
+              client=NewsClient(transport=dead, wait=0))
+    assert tries["n"] == 1

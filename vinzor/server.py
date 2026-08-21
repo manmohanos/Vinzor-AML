@@ -721,7 +721,9 @@ def build_app(engine: Vinzor, keys=None):
             elif route.startswith("/api/parties/"):
                 self._party(route[len("/api/parties/"):])
             elif route.startswith("/api/onboarding/"):
-                self._onboarding(unquote(route[len("/api/onboarding/"):]))
+                from urllib.parse import unquote as _unquote
+
+                self._onboarding(_unquote(route[len("/api/onboarding/"):]))
             elif route == "/api/screening":
                 payload = _encode(screening(engine, date.today().isoformat()))
                 payload["ui"] = UI

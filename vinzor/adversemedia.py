@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -96,6 +97,18 @@ ADVERSE_THEMES: tuple[str, ...] = (
 
 #: Seconds. A person is waiting, and GDELT is slow when it is busy.
 TIMEOUT_SECONDS = 30
+
+#: GDELT allows one request every five seconds and refuses the rest. That is
+#: a shared limit rather than a per-caller one, so an ordinary onboarding
+#: meets it -- measured on the deployed instance, which was refused on its
+#: first real search.
+#:
+#: Waiting and asking again is the honest remedy, and a bounded number of
+#: times so a busy service cannot hold an officer indefinitely. Six seconds
+#: rather than five, because the limit is theirs to measure and not ours.
+#: Exhausting the retries is still a refusal, never a clean result.
+RETRIES = 2
+WAIT_BETWEEN = 6
 
 #: A body larger than this is not an article list.
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -168,6 +181,10 @@ class NewsClient:
     window: str = DEFAULT_WINDOW
     themes: tuple[str, ...] = ADVERSE_THEMES
     most: int = MOST_ARTICLES
+    #: Seconds to wait before asking again after a rate-limit refusal.
+    #: A field rather than a constant so a test can prove the refusal without
+    #: paying twelve real seconds for it.
+    wait: float = WAIT_BETWEEN
     transport: Transport = field(default=_http)
 
     def search(self, name: str) -> tuple[list[Article], dict[str, Any]]:
@@ -184,22 +201,39 @@ class NewsClient:
                  f"&maxrecords={int(self.most)}"
                  f"&timespan={urllib.parse.quote_plus(self.window)}"
                  f"&sort=datedesc")
-        try:
-            raw = self.transport(asked)
-        except urllib.error.HTTPError as refused:
-            if refused.code == 429:
-                # The one that would have been silent. GDELT answers this
-                # with plain text, so a parser looking for articles finds
-                # none and calls the party clean.
+        raw, refusal = None, None
+        for attempt in range(RETRIES + 1):
+            try:
+                raw = self.transport(asked)
+                break
+            except urllib.error.HTTPError as answered:
+                refusal = answered
+                if answered.code == 429 and attempt < RETRIES:
+                    # Their limit, so their pace. A sleep at an I/O boundary
+                    # is not a clock reading -- nothing here asks what time
+                    # it is, and nothing derived from it reaches the log.
+                    time.sleep(self.wait)
+                    continue
+                break
+            except (urllib.error.URLError, OSError, TimeoutError) as broke:
+                refusal = broke
+                break
+
+        if raw is None:
+            if isinstance(refusal, urllib.error.HTTPError):
+                if refusal.code == 429:
+                    # The one that would have been silent. GDELT answers this
+                    # with plain text, so a parser looking for articles finds
+                    # none and calls the party clean.
+                    raise AdverseMediaUnavailable(
+                        "The news service asked us to slow down, so no search "
+                        "was made. Nothing was recorded. Try again in a "
+                        "moment."
+                    ) from None
                 raise AdverseMediaUnavailable(
-                    "The news service asked us to slow down, so no search was "
-                    "made. Nothing was recorded. Try again in a moment."
+                    "The news service answered %s and no search was made. "
+                    "Nothing was recorded." % refusal.code
                 ) from None
-            raise AdverseMediaUnavailable(
-                f"The news service answered {refused.code} and no search was "
-                f"made. Nothing was recorded."
-            ) from None
-        except (urllib.error.URLError, OSError, TimeoutError):
             raise AdverseMediaUnavailable(
                 "The news service could not be reached, so no search was "
                 "made. Nothing was recorded."

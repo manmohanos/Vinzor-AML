@@ -246,9 +246,16 @@ def _sanctions(engine, today: str = "", **inputs) -> Found:
     return Found(
         headline=f"{entity.name} may be on a sanctions list",
         how=FOUND_SOMETHING,
+        # The match detail lives under "basis", not at the top of the
+        # payload. Reading the top level gave every match the same sentence,
+        # "matched an entry on a list" -- which is the shape of a screening
+        # record that tells an officer nothing they can act on.
         details=tuple(
-            f"matched {h.get('matched_entity') or h.get('caption') or 'an entry'}"
-            f" on {', '.join(h.get('datasets') or ['a list'])[:80]}"
+            "matched %s on %s (score %s)" % (
+                (h.get("basis") or {}).get("caption") or "an entry",
+                ", ".join((h.get("basis") or {}).get("datasets")
+                          or ["a list"])[:70],
+                round(float((h.get("basis") or {}).get("score") or 0), 2))
             for h in sanctioned[:5]),
         carried={"sanctions": len(sanctioned)})
 
@@ -281,9 +288,15 @@ def _politically_exposed(engine, today: str = "", **inputs) -> Found:
     return Found(
         headline=f"{entity.name} may be politically exposed",
         how=FOUND_SOMETHING,
-        details=("Clause 5.5(b)(iii) reserves clearing this to senior "
-                 "management. A guidance note adds that a politically "
-                 "exposed person is not automatically high risk.",),
+        details=tuple(
+            ["matched %s%s" % (
+                (h.get("basis") or {}).get("caption") or "an entry",
+                " (a close associate rather than the office holder)"
+                if "PEP_ASSOCIATE" in set(h.get("list_types") or ()) else "")
+             for h in exposed[:4]]
+            + ["Clause 5.5(b)(iii) reserves clearing this to senior "
+               "management. A guidance note adds that a politically exposed "
+               "person is not automatically high risk."]),
         carried={"pep": len(exposed)})
 
 
