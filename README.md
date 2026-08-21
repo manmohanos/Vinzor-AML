@@ -46,10 +46,24 @@ which routes to whichever region in Asia-Pacific has capacity. So Claude is
 refused and something lesser is used. That trade is stated on the record
 because a firm should hear it from us rather than from an inspector.
 
-**Live watchlist screening is switched off** rather than faked, and the
-product says so on screen: it wants a local yente index of about four million
-entities, which is tens of gigabytes and hours of indexing, and that is not
-going on a micro instance to make a demonstration look complete.
+**Watchlist screening runs there too**, against a local index of all
+4,001,232 entities OpenSanctions publishes -- every sanctions list, every
+published PEP list, criminal, debarment and wanted registers -- answering in
+about a fifth of a second with nothing leaving the machine. The alternative
+was a key against a hosted API, which needs no infrastructure and sends a
+client book across a border; `leaves_this_machine()` in `screening.py` exists
+to make that choice visible, and its default is the case that leaves.
+
+Screening the narrower `sanctions` collection alone would have fitted a
+machine a third of the size: 291,264 entities against four million. It was
+measured and rejected, because five of the six topic branches in
+`screening.py` would then never fire -- including the politically-exposed one
+that clause 5.5(b)(iii) reserves for senior management. On the real book that
+difference is visible: of the first forty parties checked, the matches worth
+a look are PEPs and a debarment, not sanctions.
+
+The data is CC-BY-NC: evaluation and internal research only. Selling on top of
+it needs a licence from OpenSanctions, which is an open commercial item.
 
 ## Run it
 
