@@ -11,13 +11,13 @@ The watchlist search (nearly 4 million sanctioned, politically exposed and wante
 entities, held locally):
 
 ```bash
-cd "C:\Users\manmo\Desktop\Vinzor Projects\August\01\vinzor-core" && powershell -File selfhost/yente.ps1 start
+powershell -File selfhost/yente.ps1 start
 ```
 
 The application itself:
 
 ```bash
-cd "C:\Users\manmo\Desktop\Vinzor Projects\August\01\vinzor-core" && python -m vinzor serve --workspace live.db --port 8000
+python -m vinzor serve --workspace live.db --port 8000
 ```
 
 Then open **http://127.0.0.1:8000** in your browser. Leave that second window
@@ -26,18 +26,23 @@ open while you use it — closing it stops the site.
 The first screen now asks for a name **and a password**. They are already set
 on this workspace:
 
-| Sign in as    | Password                 | Their job          | Why you would pick them                     |
-| ------------- | ------------------------ | ------------------ | ------------------------------------------- |
-| Meera Nair    | `morning queue august`   | AML Officer        | Does the day-to-day work. Start here.       |
-| Aarav Sharma  | `second pair of eyes`    | Compliance Officer | Second pair of eyes on escalated files.     |
-| Rohan Kapoor  | `senior sign off please` | Senior Management  | The only one who can clear a PEP.           |
-| Priya Rao     | `read only access here`  | Read-only          | Can look at everything, can decide nothing. |
+| Sign in as    | Their job          | Why you would pick them                     |
+| ------------- | ------------------ | ------------------------------------------- |
+| Meera Nair    | AML Officer        | Does the day-to-day work. Start here.       |
+| Aarav Sharma  | Compliance Officer | Second pair of eyes on escalated files.     |
+| Rohan Kapoor  | Senior Management  | The only one who can clear a PEP.           |
+| Priya Rao     | Read-only          | Can look at everything, can decide nothing. |
 
-These are demonstration passwords written down in a text file, which is not
-how you would run this for real. Change one with:
+**The passwords are deliberately not written here any more.** They used to be,
+and then this file went into a public repository -- at which point they were
+not passwords, they were a published door, and the one for Senior Management
+opens the politically-exposed files nobody else may clear. Whoever set the
+workspace up has them.
+
+On a workspace of your own, set your own:
 
 ```bash
-cd "C:\Users\manmo\Desktop\Vinzor Projects\August\01\vinzor-core" && python -m vinzor password --name "Meera Nair" --workspace live.db
+python -m vinzor password --name "Meera Nair" --workspace live.db
 ```
 
 **What signing in actually fixed, which was not the missing password box.**
@@ -230,7 +235,7 @@ in three days is work somebody has to do, not a decision anybody has to make.
 To see them, or add your own:
 
 ```bash
-cd "C:\Users\manmo\Desktop\Vinzor Projects\August\01\vinzor-core" && python -m vinzor notice --list --workspace live.db
+python -m vinzor notice --list --workspace live.db
 ```
 
 **What it will not save you from.** Karvy Broking lost its registration partly
@@ -268,7 +273,7 @@ suggests rather than decides.
 **Three things you can try.** File a document:
 
 ```bash
-cd "C:\Users\manmo\Desktop\Vinzor Projects\August\01\vinzor-core" && python -m vinzor document --kinds
+python -m vinzor document --kinds
 ```
 
 Try to promote one past what it is — a utility bill said to evidence a
@@ -391,7 +396,7 @@ accountable can confirm the minimum that actually applies to you. Until then
 the caveat travels with every finding that used it.
 
 ```bash
-cd "C:\Users\manmo\Desktop\Vinzor Projects\August\01\vinzor-core" && python -m vinzor capital --workspace live.db
+python -m vinzor capital --workspace live.db
 ```
 
 **Then click "Where you stand with IFSCA"** and scroll past the capital

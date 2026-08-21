@@ -24,6 +24,27 @@ events ──► graph ──► policies ──► cases ──► human decisi
 
 Stdlib only. No dependencies, no services, no build step.
 
+## Live
+
+<https://dikytp5q85njb.cloudfront.net>
+
+The real thing, on the synthetic book, in Mumbai (`ap-south-1`). Every push to
+`main` lands there once the suite passes -- the workflow in
+`.github/workflows/deploy.yml` refuses to deploy a red build, because the
+suite is the only thing holding the invariants in DESIGN.md in place.
+
+Signing in needs a password, and they are deliberately not published: this
+repository is public, and a password in a public file is a door, not a
+credential. Two things are switched off there rather than faked, and the
+product says so on screen rather than pretending otherwise:
+
+- **Live watchlist screening.** It wants a local yente index of about four
+  million entities; that is tens of gigabytes and hours of indexing, and it
+  is not going on a micro instance to make a demonstration look complete.
+- **The assistant.** A model key on a public box is an unauthenticated
+  spend endpoint, and the residency rule in `azure.py` exists precisely
+  because where the data goes is the point.
+
 ## Run it
 
 ```bash

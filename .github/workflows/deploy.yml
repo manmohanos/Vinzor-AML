@@ -1,0 +1,83 @@
+name: deploy
+
+# Every push to main lands on the live site. The gate below is the reason
+# that is safe to say: this repository's own argument is that the suite is
+# the only thing holding the twelve invariants in DESIGN.md in place, so a
+# red build must never become the thing a regulator is looking at.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write      # to mint the OIDC token AWS trusts
+  contents: read
+
+# One deploy at a time. The workspace is a single-writer SQLite ledger and
+# the deploy restarts the process holding it; two overlapping deploys would
+# be two restarts racing over one file.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: the suite must pass first
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip pytest
+      - name: Run the suite
+        run: python -m pytest -q
+      - name: Walk the whole chain over the sample dataset
+        run: python -m vinzor
+
+  deploy:
+    name: pull and restart on the instance
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assume the deploy role
+        # No stored AWS key. GitHub mints a short-lived token, AWS trusts it
+        # only from this repository and only from refs/heads/main, and the
+        # role it grants can send one shell command to one instance.
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE }}
+          aws-region: ap-south-1
+
+      - name: Deploy over SSM
+        env:
+          INSTANCE: ${{ secrets.AWS_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          ID=$(aws ssm send-command \
+                --instance-ids "$INSTANCE" \
+                --document-name AWS-RunShellScript \
+                --comment "deploy ${GITHUB_SHA:0:7}" \
+                --parameters 'commands=["/usr/local/bin/vinzor-deploy"]' \
+                --query Command.CommandId --output text)
+          echo "ssm command: $ID"
+          aws ssm wait command-executed --command-id "$ID" --instance-id "$INSTANCE" || true
+          echo "--- output from the instance ---"
+          aws ssm get-command-invocation --command-id "$ID" --instance-id "$INSTANCE" \
+              --query StandardOutputContent --output text
+          STATUS=$(aws ssm get-command-invocation --command-id "$ID" --instance-id "$INSTANCE" \
+                   --query Status --output text)
+          echo "--- status: $STATUS ---"
+          if [ "$STATUS" != "Success" ]; then
+            echo "--- stderr ---"
+            aws ssm get-command-invocation --command-id "$ID" --instance-id "$INSTANCE" \
+                --query StandardErrorContent --output text
+            exit 1
+          fi
+
+      - name: The live site must answer
+        # A deploy that restarted the service and left it serving nothing is
+        # a failed deploy, not a green one.
+        run: |
+          curl -fsS --retry 6 --retry-delay 5 --retry-all-errors \
+               -o /dev/null -w "live site: HTTP %{http_code}\n" "${{ vars.LIVE_URL }}/"
