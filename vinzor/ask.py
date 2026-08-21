@@ -904,3 +904,109 @@ def azure_conversation(env: Optional[Mapping[str, str]] = None, http=None):
         )
 
     return talk
+
+
+def bedrock_conversation(*, now, env: Optional[Mapping[str, str]] = None,
+                         http=None):
+    """The same, over Bedrock. The twin of ``azure_conversation`` above.
+
+    Everything structural is identical -- one place a credential is read, the
+    residency rule enforced before the call, a redirect refused loudly rather
+    than followed, and the boundary pricing its own call because it is the
+    only thing that knows its rates. What differs is only the wire: Converse
+    keeps the system prompt in a field of its own, and names its token counts
+    ``inputTokens`` rather than ``prompt_tokens``.
+
+    ``now`` is required and has no default, because SigV4 signatures are
+    time-scoped and no module under ``vinzor/`` may read a clock.
+    """
+    import json as _json
+
+    from .bedrock import (MAX_OUTPUT_TOKENS, BedrockConfig, DataResidencyError,
+                          _from_env, _from_instance_role, _http, _OPENER,
+                          sigv4_headers)
+
+    config = (BedrockConfig.from_env(env) if env is not None
+              else BedrockConfig.from_env())
+    call = http or _http
+    source = env if env is not None else None
+
+    def talk(messages: Sequence[Mapping[str, str]]) -> Spoken:
+        import os
+
+        environment = source if source is not None else os.environ
+        credentials = _from_env(environment) or _from_instance_role(_OPENER)
+        if credentials is None:
+            raise AskingUnavailable(
+                "no AWS credentials: set AWS_ACCESS_KEY_ID and "
+                "AWS_SECRET_ACCESS_KEY, or attach a role to the machine"
+            )
+
+        system = [{"text": m["content"]} for m in messages
+                  if m.get("role") == "system"]
+        turns = [{"role": m["role"], "content": [{"text": m["content"]}]}
+                 for m in messages if m.get("role") in ("user", "assistant")]
+        body = _json.dumps({
+            "messages": turns,
+            "system": system,
+            "inferenceConfig": {"maxTokens": MAX_OUTPUT_TOKENS,
+                                "temperature": 0, "topP": 1},
+        }).encode()
+
+        headers = sigv4_headers(url=config.url, body=body,
+                                region=config.region, when=now(),
+                                credentials=credentials)
+        try:
+            raw, _headers = call(config.url, body, headers)
+        except urllib.error.HTTPError as refusal:
+            if 300 <= refusal.code < 400:
+                # Refused, not followed, and loud rather than silent, for the
+                # reason the Azure path gives: a redirect is how one header
+                # would send an Indian FME's records elsewhere with the
+                # credentials attached.
+                raise DataResidencyError(
+                    f"the endpoint answered {refusal.code} and asked for the "
+                    f"question to be sent somewhere else. It was not sent, "
+                    f"and the credentials did not travel."
+                ) from None
+            if refusal.code == 400:
+                # The same real outcome as Azure's content screen: a party
+                # whose name reads like an instruction can be refused by the
+                # provider. Say which kind of refusal it was, because "could
+                # not be reached" sends an officer to check their network for
+                # what was a decision about content. The body is never echoed.
+                raise AskingUnavailable(
+                    "The assistant's provider refused to process this "
+                    "question. That usually means something in the records it "
+                    "read looks like an instruction rather than data. Open the "
+                    "party or the file directly instead."
+                ) from None
+            raise AskingUnavailable(
+                f"the assistant's provider refused the request ({refusal.code})"
+            ) from None
+        except (urllib.error.URLError, OSError, TimeoutError):
+            raise AskingUnavailable("the assistant did not answer") from None
+
+        try:
+            envelope = _json.loads(raw)
+            blocks = envelope["output"]["message"]["content"]
+            content = next(b["text"] for b in blocks if "text" in b)
+        except (ValueError, KeyError, IndexError, TypeError, StopIteration):
+            raise AskingUnavailable(
+                "the assistant replied with something this system cannot read"
+            ) from None
+
+        usage = envelope.get("usage") or {}
+        tokens_in = int(usage.get("inputTokens") or 0)
+        tokens_out = int(usage.get("outputTokens") or 0)
+        return Spoken(
+            reply=first_object(content),
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost_usd=round(tokens_in / 1000 * config.cost_per_1k_input
+                           + tokens_out / 1000 * config.cost_per_1k_output, 6),
+            model=config.model_id,
+            region=config.region,
+        )
+
+    return talk

@@ -21,7 +21,7 @@ import json
 import os
 import re
 import threading
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -64,6 +64,21 @@ def enroll_people(engine: Vinzor, when: str) -> None:
     for person in PEOPLE:
         engine.enroll(name=person["name"], role=person["role"],
                       title=person["title"], enrolled_at=when)
+
+def _utcnow() -> datetime:
+    """The clock the Bedrock boundary signs with, supplied from here.
+
+    SigV4 signatures are time-scoped, so ``bedrock.py`` genuinely needs a
+    timestamp -- and no module under ``vinzor/`` may read a clock. Rather
+    than add that file to the short list of exceptions, the clock enters at
+    this boundary, which already reads one for every decision, and is passed
+    down like every other date in this system.
+
+    It signs a request and is then discarded. It never reaches the log, which
+    is the reason the doctrine exists and the reason this is not a hole in it.
+    """
+    return datetime.now(timezone.utc)
+
 
 WORKSPACE = "Acme GIFT Fund Managers Ltd"
 
@@ -808,13 +823,13 @@ def build_app(engine: Vinzor, keys=None):
             # than inside the fold. A slow assistant delays a page; it must
             # never delay a decision.
             transport = None
-            from . import azure
+            from . import providers
             try:
                 # Inside the try, not beside it: an assistant that cannot be
                 # built is a page without a suggestion on it, never a page
                 # that fails to load.
-                if azure.configured():
-                    transport = azure.drafter().transport
+                if providers.configured():
+                    transport = providers.drafter(now=_utcnow).transport
             except Exception:
                 transport = None
             payload = _encode(dossier(engine, unquote(entity_id),
@@ -833,7 +848,8 @@ def build_app(engine: Vinzor, keys=None):
             running. The officer types a sentence either way and does not
             have to know which it will be.
             """
-            from .ask import ask, azure_conversation
+            from . import providers
+            from .ask import ask
             from .planning import plan_from
 
             acting = self._who()
@@ -858,10 +874,10 @@ def build_app(engine: Vinzor, keys=None):
                 return
 
             transport = None
-            from . import azure
+            from . import providers
             try:
-                if azure.configured():
-                    transport = azure.drafter().transport
+                if providers.configured():
+                    transport = providers.drafter(now=_utcnow).transport
             except Exception:
                 transport = None
 
@@ -876,7 +892,7 @@ def build_app(engine: Vinzor, keys=None):
             if plan.kind == "answer":
                 try:
                     answered = ask(engine, asked,
-                                   transport=azure_conversation(),
+                                   transport=providers.conversation(now=_utcnow),
                                    person=acting, asked_at=today)
                 except Exception:
                     # A reader that cannot be reached is a normal state,
@@ -954,10 +970,10 @@ def build_app(engine: Vinzor, keys=None):
                 # found. Where it cannot be reached, a keyword fallback
                 # answers and the screen says so.
                 transport = None
-                from . import azure
+                from . import providers
                 try:
-                    if azure.configured():
-                        transport = azure.drafter().transport
+                    if providers.configured():
+                        transport = providers.drafter(now=_utcnow).transport
                 except Exception:
                     transport = None
                 task_id, plan = engine.give_asked_task(
@@ -1422,10 +1438,10 @@ def build_app(engine: Vinzor, keys=None):
                 scope=os.environ.get("VINZOR_SCREENING_SCOPE", "default"),
             )
             drafter = None
-            from . import azure
+            from . import providers
             try:
-                if azure.configured():
-                    drafter = azure.drafter()
+                if providers.configured():
+                    drafter = providers.drafter(now=_utcnow)
             except Exception:
                 drafter = None          # a missing drafter is not an error
             try:
@@ -1448,7 +1464,8 @@ def build_app(engine: Vinzor, keys=None):
             said go on the log. It settles nothing -- there is no tool behind
             it that can.
             """
-            from .ask import AskingUnavailable, ask, azure_conversation
+            from . import providers
+            from .ask import AskingUnavailable, ask
 
             question = (body.get("question") or "").strip()
             if not question:
@@ -1459,7 +1476,7 @@ def build_app(engine: Vinzor, keys=None):
                 return
             try:
                 answer = ask(engine, question,
-                             transport=azure_conversation(),
+                             transport=providers.conversation(now=_utcnow),
                              person=body.get("person", ""),
                              # The date is supplied here, at the boundary,
                              # because nothing inside vinzor/ reads a clock.
@@ -1662,7 +1679,7 @@ def open_workspace(path: Optional[Path] = None, dataset: Path = DEFAULT_DATASET,
 
 def serve(host: str = "127.0.0.1", port: int = 8000,
           workspace: Optional[Path] = None) -> None:
-    from .azure import check_region
+    from .providers import check_region
 
     # Loudly, and at boot. A region outside India used to be discovered once
     # per page view, as a dropped connection and a traceback on this console.

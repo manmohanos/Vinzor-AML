@@ -35,15 +35,21 @@ suite is the only thing holding the invariants in DESIGN.md in place.
 
 Signing in needs a password, and they are deliberately not published: this
 repository is public, and a password in a public file is a door, not a
-credential. Two things are switched off there rather than faked, and the
-product says so on screen rather than pretending otherwise:
+credential.
 
-- **Live watchlist screening.** It wants a local yente index of about four
-  million entities; that is tens of gigabytes and hours of indexing, and it
-  is not going on a micro instance to make a demonstration look complete.
-- **The assistant.** A model key on a public box is an unauthenticated
-  spend endpoint, and the residency rule in `azure.py` exists precisely
-  because where the data goes is the point.
+**The assistant runs there**, over Bedrock in Mumbai — no key anywhere, the
+instance holds a role and `bedrock.py` mints a credential per request. What
+it cannot do is use a good model, and the reason is the whole residency
+argument rather than a limitation of the adapter: in `ap-south-1` every
+Anthropic model is offered **only** through a cross-region inference profile,
+which routes to whichever region in Asia-Pacific has capacity. So Claude is
+refused and something lesser is used. That trade is stated on the record
+because a firm should hear it from us rather than from an inspector.
+
+**Live watchlist screening is switched off** rather than faked, and the
+product says so on screen: it wants a local yente index of about four million
+entities, which is tens of gigabytes and hours of indexing, and that is not
+going on a micro instance to make a demonstration look complete.
 
 ## Run it
 

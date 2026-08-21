@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -65,9 +65,12 @@ USAGE = """vinzor
   python -m vinzor notice       record a letter from a regulator, or the
                                 answer to one. --list shows what is open
   python -m vinzor assist       prepare suggestions for open name checks
-                                (Azure OpenAI, India only; needs
-                                 AZURE_OPENAI_ENDPOINT / _DEPLOYMENT / _REGION
-                                 / _KEY. --limit N, --budget USD, --dry-run)
+                                (India only, whichever is configured:
+                                 Azure OpenAI -- AZURE_OPENAI_ENDPOINT /
+                                 _DEPLOYMENT / _REGION / _KEY; or Bedrock --
+                                 VINZOR_BEDROCK=1, VINZOR_BEDROCK_REGION and
+                                 a role on the machine.
+                                 --limit N, --budget USD, --dry-run)
 
   serve options:
     --port N        default 8000
@@ -202,7 +205,8 @@ def _assist_cli(argv: list[str]) -> int:
     a fact about what the system said, and waits for a person.
     """
     from .assist import DEFAULT_BUDGET_USD, DraftingUnavailable, prepare_drafts
-    from .azure import AzureConfig, DataResidencyError, drafter
+    from .azure import DataResidencyError
+    from . import providers
     from .briefing import report
     from .compare import comparison_for
     from .quality import measure
@@ -229,22 +233,26 @@ def _assist_cli(argv: list[str]) -> int:
         return 0
 
     try:
-        config = AzureConfig.from_env()
+        # A boundary, so the clock lives here and is handed down: Bedrock
+        # signs with it and no module below may read one.
+        prepared = providers.drafter(now=lambda: datetime.now(timezone.utc))
     except DraftingUnavailable as exc:
         print(f"  {exc}")
-        print("  Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, "
-              "AZURE_OPENAI_REGION and AZURE_OPENAI_KEY.")
+        print("  For Azure: set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT,")
+        print("  AZURE_OPENAI_REGION and AZURE_OPENAI_KEY.")
+        print("  For Bedrock: set VINZOR_BEDROCK=1 and VINZOR_BEDROCK_REGION,")
+        print("  and give the machine credentials or a role.")
         print("  The region must be one inside India; nothing else is accepted.")
         return 1
     except DataResidencyError as exc:
         print(f"  refused: {exc}")
         return 1
 
-    print(f"  drafting with {config.deployment} in {config.region}, "
+    print(f"  drafting with {prepared.model} in {prepared.region}, "
           f"up to US$ {budget:,.2f}")
     try:
         drafts = prepare_drafts(engine, prepared_at=date.today().isoformat(),
-                                drafter=drafter(config), limit=limit,
+                                drafter=prepared, limit=limit,
                                 budget_usd=budget)
     except DataResidencyError as exc:
         print(f"  STOPPED - {exc}")

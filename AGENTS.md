@@ -41,9 +41,16 @@ work list.
 - **Never let a model establish a fact.** Deterministic code computes the
   comparison; the model judges what it means and writes prose. A draft that
   states a figure it was not given is destroyed, not shown (`assist.py`).
-- **Never send investor data outside India.** The region is checked before the
-  first call and again on every reply, from the `x-ms-region` header. A breach
-  raises loudly — it is the one failure that is not silent (`azure.py`).
+- **Never send investor data outside India.** On Azure the region is checked
+  before the first call and again on every reply, from the `x-ms-region`
+  header. On Bedrock there is no such header, so the guarantee is structural
+  instead: the endpoint is derived from the region, cross-region inference
+  profiles are refused by prefix, and SigV4 names the region in the string it
+  signs. A breach raises loudly — it is the one failure that is not silent
+  (`azure.py`, `bedrock.py`). **This rule costs something and it is still the
+  rule:** every Anthropic model in `ap-south-1` is offered only through a
+  cross-region profile, so the best model available is refused and a weaker
+  one used.
 - **Never put a secret anywhere but the environment.** Not a file, not an
   argument, not an event, not an exception, not a `repr`. The log is
   append-only: a key written there cannot be taken back.

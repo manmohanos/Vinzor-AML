@@ -32,6 +32,21 @@ WorkingDirectory=/var/lib/vinzor
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=/opt/vinzor
 
+# The assistant, over Bedrock. There is deliberately no key here and none on
+# the machine: the instance has a role, and bedrock.py mints a credential per
+# request from the instance metadata service. A key in this file would be a
+# secret in version control, which is the one thing AGENTS.md refuses outright.
+#
+# The region is stated rather than inherited so that it is reviewable here.
+# It is also enforced three further times -- by bedrock.py's allowlist, by its
+# refusal of cross-region inference profiles, and by the IAM policy on the
+# role, which grants only `arn:aws:bedrock:ap-south-1::foundation-model/*`.
+# That last one is the belt: a foundation-model ARN carries no account id and
+# an inference-profile ARN does, so the grant cannot reach a profile that
+# would route the data out of India even if the code were changed to ask.
+Environment=VINZOR_BEDROCK=1
+Environment=VINZOR_BEDROCK_REGION=ap-south-1
+
 # An absolute path on purpose. Amazon Linux 2023 ships 3.9 as `python3` and
 # installs the 3.11 the core requires here; naming it exactly means a
 # machine missing that package fails at start-up with a clear error rather
