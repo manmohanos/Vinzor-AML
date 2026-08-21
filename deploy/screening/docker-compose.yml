@@ -40,10 +40,19 @@ services:
       # only CloudFront on 80. Turning on authentication here would be a
       # password stored beside the thing it protects.
       - xpack.security.enabled=false
-      # Three gigabytes of an eight gigabyte machine. Elasticsearch wants heap
-      # at no more than half of RAM, and yente needs room to stream a 2.4 GB
-      # bulk file past it while the application keeps serving.
-      - ES_JAVA_OPTS=-Xms3g -Xmx3g
+      # Heap follows the machine, because the machine changes. Building the
+      # index and serving it want very different hardware: the build is CPU
+      # bound for tens of minutes and then never runs again, while serving
+      # four million entities answers in tens of milliseconds on very little.
+      # So the box is scaled up to build and back down to serve, and a heap
+      # figure baked in here would be wrong on one of the two.
+      #
+      # Elasticsearch wants heap at no more than half of RAM, and yente needs
+      # room to stream a 2.4 GB bulk file past it while the application keeps
+      # serving. Three gigabytes suits the eight-gigabyte serving box, which
+      # is why it is the default; set ES_HEAP in a .env file beside this one
+      # to raise it for a build.
+      - ES_JAVA_OPTS=-Xms${ES_HEAP:-3g} -Xmx${ES_HEAP:-3g}
       # On a container without the memlock capability the default fails into a
       # restart loop that reports itself as healthy for a while first.
       - bootstrap.memory_lock=false
