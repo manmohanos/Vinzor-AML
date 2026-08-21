@@ -20,6 +20,7 @@ import dataclasses
 import json
 import os
 import re
+import sys
 import threading
 from datetime import date, datetime, timezone
 from http import HTTPStatus
@@ -894,10 +895,26 @@ def build_app(engine: Vinzor, keys=None):
                     answered = ask(engine, asked,
                                    transport=providers.conversation(now=_utcnow),
                                    person=acting, asked_at=today)
-                except Exception:
+                except Exception as failure:
                     # A reader that cannot be reached is a normal state,
                     # not an error page: the officer is told and can ask
                     # for the work instead.
+                    #
+                    # The operator is told which failure it was, on the
+                    # console and nowhere near the officer. Catching every
+                    # exception and printing one sentence about the network
+                    # made a Bedrock configuration fault look identical to a
+                    # dropped connection, and cost an hour of guessing at a
+                    # box that was answering perfectly well when asked
+                    # directly. A guard that fires silently is a guard
+                    # nobody can audit -- including us.
+                    #
+                    # The class and its message, never a traceback and never
+                    # the question: the first two say what to fix, and the
+                    # rest is either noise or a customer's records in a log.
+                    print(f"  the reader refused a question: "
+                          f"{type(failure).__name__}: {failure}",
+                          file=sys.stderr)
                     self._json({
                         "kind": "refused",
                         "said": "The reader could not be reached just now, "
