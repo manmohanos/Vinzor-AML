@@ -96,7 +96,7 @@ ADVERSE_THEMES: tuple[str, ...] = (
 )
 
 #: Seconds. A person is waiting, and GDELT is slow when it is busy.
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS = 12
 
 #: GDELT allows one request every five seconds and refuses the rest. That is
 #: a shared limit rather than a per-caller one, so an ordinary onboarding
@@ -107,8 +107,17 @@ TIMEOUT_SECONDS = 30
 #: times so a busy service cannot hold an officer indefinitely. Six seconds
 #: rather than five, because the limit is theirs to measure and not ours.
 #: Exhausting the retries is still a refusal, never a clean result.
-RETRIES = 2
+#: One retry, not more. Two cost a minute and a half of an officer's
+#: attention before the first check could even start, and the press is the
+#: least decisive of the eight -- a sanctions match stops the money and this
+#: does not. Asking twice recovers the ordinary case where the shared limit
+#: happened to be busy; asking five times just makes somebody wait.
+RETRIES = 1
 WAIT_BETWEEN = 6
+
+#: Seconds this whole search may take, retries and all. GDELT is slow when it
+#: is busy and there is somebody watching a screen.
+GIVE_UP_AFTER = 25
 
 #: A body larger than this is not an article list.
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024

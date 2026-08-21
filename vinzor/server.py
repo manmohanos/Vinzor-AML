@@ -91,6 +91,13 @@ WORKSPACE = "Acme GIFT Fund Managers Ltd"
 #: server's memory.
 MAX_BODY_BYTES = 64 * 1024
 
+#: How long an onboarding will wait for the outside world before running the
+#: checks anyway. Both observations are attempted at once and either may be
+#: slow; past this the checks run and report honestly that the watchlist or
+#: the press was not reached, which is a finding an officer can act on and is
+#: better than a screen that sits still.
+GATHER_SECONDS = 30
+
 #: A spreadsheet is allowed to be a spreadsheet. Twenty megabytes covers
 #: years of statement lines; anything past it is not a sheet a person read.
 MAX_SHEET_BYTES = 20 * 1024 * 1024
@@ -425,15 +432,68 @@ def build_app(engine: Vinzor, keys=None):
             checks then report the absence honestly, which is the finding an
             officer acts on.
             """
-            try:
-                self._observe_world(party, today)
-            except Exception as broke:      # noqa: BLE001
-                print("  onboarding could not gather: %s: %s"
-                      % (type(broke).__name__, broke), file=sys.stderr)
+            # Both at once, not one after the other. Run serially they cost
+            # up to a minute and a half before the first check could start,
+            # and an officer watching eight rows sit at "waiting" for that
+            # long has been given a progress bar over a sleep -- which is the
+            # one thing agents.py refuses to do. They are independent
+            # questions to independent services; there is no reason to make
+            # the press wait for the watchlist.
+            gathering = [
+                threading.Thread(target=self._screen_quietly,
+                                 args=(party, today), daemon=True),
+                threading.Thread(target=self._press_quietly,
+                                 args=(party, today), daemon=True),
+            ]
+            for one in gathering:
+                one.start()
+            for one in gathering:
+                one.join(GATHER_SECONDS)
             try:
                 engine.run_task(task_id, when=today, party=party)
             except Exception as broke:      # noqa: BLE001
                 print("  an onboarding run stopped: %s: %s"
+                      % (type(broke).__name__, broke), file=sys.stderr)
+
+        def _screen_quietly(self, party: str, today: str) -> None:
+            """The watchlist. Silent to the officer, loud in the log.
+
+            They will see it on screen as "nobody has run a watchlist check",
+            which is true, is the thing they have to act on, and is the one
+            sentence this product will not soften.
+            """
+            import os
+
+            from .screening import ScreeningUnavailable, WatchlistClient, screen
+
+            try:
+                screen(engine, party, screened_at=today,
+                       client=WatchlistClient(
+                           url=os.environ.get("VINZOR_SCREENING_URL",
+                                              "https://api.opensanctions.org"),
+                           api_key=os.environ.get("VINZOR_SCREENING_KEY", ""),
+                           scope=os.environ.get("VINZOR_SCREENING_SCOPE",
+                                                "default")))
+            except ScreeningUnavailable as why:
+                print("  onboarding could not screen: %s" % why,
+                      file=sys.stderr)
+            except Exception as broke:      # noqa: BLE001
+                print("  onboarding could not screen: %s: %s"
+                      % (type(broke).__name__, broke), file=sys.stderr)
+
+        def _press_quietly(self, party: str, today: str) -> None:
+            """The news. Least decisive of the eight, so it never holds the
+            others up: a sanctions match stops the money and this does not."""
+            from .adversemedia import AdverseMediaUnavailable
+            from .adversemedia import check as read_the_press
+
+            try:
+                read_the_press(engine, party, checked_at=today)
+            except AdverseMediaUnavailable as why:
+                print("  onboarding could not read the press: %s" % why,
+                      file=sys.stderr)
+            except Exception as broke:      # noqa: BLE001
+                print("  onboarding could not read the press: %s: %s"
                       % (type(broke).__name__, broke), file=sys.stderr)
 
         def _observe_world(self, party: str, today: str) -> None:

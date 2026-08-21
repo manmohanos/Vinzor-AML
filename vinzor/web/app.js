@@ -750,8 +750,8 @@
           <div class="wizard-foot">
             <a class="btn" href="#/onboard">${word("onboard_back", "Back")}</a>
             <span class="spacer"></span>
-            <a class="btn btn-primary" href="#/run/${encodeURIComponent(taskId)}/${
-              encodeURIComponent(partyId)
+            <a class="btn btn-primary" href="#/checks/${encodeURIComponent(partyId)}/${
+              encodeURIComponent(taskId)
             }">${word("onboard_next", "Next")}</a>
           </div>
         </div>`);
@@ -848,6 +848,54 @@
     get("/api/onboarding/" + encodeURIComponent(partyId))
       .then(function (record) { draw(absorb(record)); })
       .catch(function (error) { failed(where, error); });
+  }
+
+  /* ---------- onboarding: step three, start the checks ---------- */
+
+  /* One button, and it does what it says: it starts a run, over this party,
+     with whatever is now on their file. Pressing it is what makes the next
+     screen worth watching — the eight checks are carried out after the
+     documents were added, not before. */
+  function onboardChecks(partyId, taskId) {
+    var where = frame("onboard");
+    mount(where, h`
+      <div class="wizard ask-one">
+        ${stepBar(2)}
+        <h1>${word("onboard_step_checks", "The checks")}</h1>
+        <p class="prose soft">${word("agents_lead", "")}</p>
+        <div class="wizard-foot">
+          <a class="btn" href="#/onboard/${encodeURIComponent(partyId)}/${
+            encodeURIComponent(taskId)
+          }">${word("onboard_back", "Back")}</a>
+          <span class="spacer"></span>
+          <p class="problem" hidden></p>
+          <button type="button" class="btn btn-primary btn-big" id="run-them">${
+            word("onboard_run", "Start the checks")
+          }</button>
+        </div>
+      </div>`);
+
+    var button = where.querySelector("#run-them");
+    var problem = where.querySelector(".problem");
+    button.addEventListener("click", function () {
+      button.disabled = true;
+      problem.hidden = true;
+      button.textContent = word("agents_watching", "");
+      /* "onboard" is the name of the job, not a word anybody reads. It is
+         sent, never shown. */
+      post("/api/tasks", { job: "onboard", party: partyId })
+        .then(function (started) {
+          go("#/run/" + encodeURIComponent(started.task_id || taskId) +
+             "/" + encodeURIComponent(partyId));
+        })
+        .catch(function (error) {
+          button.disabled = false;
+          button.textContent = word("onboard_run", "Start the checks");
+          problem.hidden = false;
+          problem.textContent = said(error);
+        });
+    });
+    button.focus();
   }
 
   /* ---------- the live run ---------- */
@@ -1687,6 +1735,7 @@
     var at = here();
     if (at.name === "onboard" && at.a) { onboardPapers(at.a, at.b); return; }
     if (at.name === "onboard") { onboardWho(); return; }
+    if (at.name === "checks" && at.a) { onboardChecks(at.a, at.b); return; }
     if (at.name === "run" && at.a) { runScreen(at.a, at.b); return; }
     if (at.name === "report" && at.a) { reportScreen(at.a, at.b); return; }
     if (at.name === "queue") { queueScreen(at.a); return; }
