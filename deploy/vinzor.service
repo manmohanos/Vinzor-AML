@@ -47,6 +47,14 @@ Environment=PYTHONPATH=/opt/vinzor
 Environment=VINZOR_BEDROCK=1
 Environment=VINZOR_BEDROCK_REGION=ap-south-1
 
+# The watchlist, on this machine. Loopback, so `leaves_this_machine()` in
+# screening.py answers false and the product does not print its off-machine
+# warning -- which it should print, loudly, the moment anybody points this at
+# a hosted API instead. The default in that module is the hosted one, and the
+# default is the case that leaves the country.
+Environment=VINZOR_SCREENING_URL=http://127.0.0.1:8090
+Environment=VINZOR_SCREENING_SCOPE=default
+
 # An absolute path on purpose. Amazon Linux 2023 ships 3.9 as `python3` and
 # installs the 3.11 the core requires here; naming it exactly means a
 # machine missing that package fails at start-up with a clear error rather

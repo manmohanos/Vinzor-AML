@@ -1,0 +1,43 @@
+# What the local yente indexes.
+#
+# The deployed twin of selfhost/manifest.yml, which does the same job on a
+# laptop under PowerShell. Kept separate rather than shared because the two
+# differ in exactly one way that matters -- how the firm's own list is
+# reached -- and a single file with a Windows workaround in it would be a
+# file that is wrong on one of the two machines.
+#
+# Scope "default" is OpenSanctions' full consolidated collection: every
+# sanctions list (UN, OFAC, EU, UK and the rest), every published PEP list,
+# criminal watchlists, debarment and disqualification registers, and wanted
+# lists. About four million entities from 250+ sources, merged and
+# deduplicated.
+#
+# The narrower "sanctions" scope stays available as a sub-collection, so
+# anything that asks to screen against sanctions only still can: widening the
+# index loses nothing. It was measured before choosing -- sanctions alone is
+# 291,264 entities against 4,001,232, and would have fitted a machine a third
+# of the size. It was rejected because five of the six topic branches in
+# screening.py would then never fire, including the politically-exposed one
+# that clause 5.5(b)(iii) reserves for senior management. A watchlist that
+# cannot see a PEP is not a cheaper watchlist, it is a different product.
+#
+# Licence: CC-BY-NC. Evaluation and internal research only without a data
+# licence from OpenSanctions.
+catalogs:
+  - url: "https://data.opensanctions.org/datasets/latest/index.json"
+    scope: default
+    resource_name: entities.ftm.json
+
+# A firm's own list, indexed beside the public ones so one search answers both
+# questions: applicants refused before, related parties, names a correspondent
+# bank has asked about. "Can it screen our own list too" is a question a buyer
+# asks in the first meeting.
+#
+# `version` is what triggers re-indexing. Change the file without changing the
+# version and yente keeps serving the old contents -- which is a quiet way to
+# have a refused applicant stop being refused.
+datasets:
+  - name: own_list
+    title: This firm's own list
+    path: /manifests/own-list.json
+    version: "20260822001"

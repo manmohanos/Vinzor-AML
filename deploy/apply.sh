@@ -79,6 +79,19 @@ if [ -f "$REPO/deploy/vinzor.service" ]; then
     systemd-analyze verify "$UNIT" 2>&1 | sed 's/^/   systemd: /' || true
 fi
 
+# -- the watchlist index -----------------------------------------------------
+# Deliberately NOT part of the rollback, and deliberately not able to fail a
+# deploy. The product works without a watchlist: screening.py answers with a
+# named refusal and every screen says "nobody has run a watchlist check on
+# this party", which is honest and is a state a firm is genuinely in on its
+# first day. Taking the whole site down because a search index would not
+# start would be trading something that works for something that does not.
+if [ -f "$REPO/deploy/screening/docker-compose.yml" ] && command -v docker >/dev/null; then
+    say "bringing up the watchlist index"
+    ( cd "$REPO/deploy/screening" && docker compose up -d ) \
+        || say "the watchlist index did not come up; the product will say so on screen"
+fi
+
 systemctl daemon-reload || rollback
 
 # -- put it into service -----------------------------------------------------

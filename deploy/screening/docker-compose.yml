@@ -1,0 +1,77 @@
+# The watchlist index, on this machine.
+#
+# ~4 million sanctioned, politically exposed, wanted, debarred and criminally
+# listed entities, answered locally in tens of milliseconds, with nothing
+# leaving the building. That last clause is the reason this exists rather than
+# a paid API key: sending a client book to a hosted matcher is a cross-border
+# transfer of customer identity data, and the same residency argument that
+# refuses a cross-region Bedrock profile refuses that too.
+#
+# `vinzor/screening.py` speaks the yente protocol over stdlib urllib and does
+# not care which of the two it is talking to. Point VINZOR_SCREENING_URL at
+# the hosted API and the adapter works unchanged -- and `leaves_this_machine()`
+# starts returning true, which is the whole point of that function existing.
+#
+# Licence, stated once and plainly: the OpenSanctions bulk data is CC-BY-NC.
+# Free for evaluation and internal research, which is what this is. Selling a
+# product on top of it needs a data licence from OpenSanctions, and that is an
+# open commercial item rather than a technical one.
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      - discovery.type=single-node
+      # No TLS and no auth, because nothing outside this machine can reach it:
+      # the port below is bound to loopback, and the security group admits
+      # only CloudFront on 80. Turning on authentication here would be a
+      # password stored beside the thing it protects.
+      - xpack.security.enabled=false
+      # Three gigabytes of an eight gigabyte machine. Elasticsearch wants heap
+      # at no more than half of RAM, and yente needs room to stream a 2.4 GB
+      # bulk file past it while the application keeps serving.
+      - ES_JAVA_OPTS=-Xms3g -Xmx3g
+      # On a container without the memlock capability the default fails into a
+      # restart loop that reports itself as healthy for a while first.
+      - bootstrap.memory_lock=false
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    ports:
+      - "127.0.0.1:9200:9200"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 60
+      start_period: 60s
+
+  yente:
+    image: ghcr.io/opensanctions/yente:latest
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - YENTE_INDEX_TYPE=elasticsearch
+      - YENTE_INDEX_URL=http://elasticsearch:9200
+      - YENTE_MANIFEST=/manifests/manifest.yml
+      # It refreshes the index in the background of the API process. The
+      # alternative is a cron job that nobody notices has stopped, and a
+      # watchlist that is quietly six weeks old is worse than one that is
+      # obviously absent.
+      - YENTE_AUTO_REINDEX=true
+    volumes:
+      - ./manifest.yml:/manifests/manifest.yml:ro
+      # The firm's own list, indexed beside the public ones so that one search
+      # answers both questions. Every FME keeps one.
+      - ../../selfhost/own-list.json:/manifests/own-list.json:ro
+    # Loopback only. This answers questions about who is on a sanctions list;
+    # it is not a public service and there is no reason for it to be reachable.
+    ports:
+      - "127.0.0.1:8090:8000"
+    restart: unless-stopped
+
+volumes:
+  esdata:
