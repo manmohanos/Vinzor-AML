@@ -1,0 +1,53 @@
+# How the workspace is launched on the server.
+#
+# In the repository rather than on the machine, so that "how does this run in
+# production" is a question the source answers. Applied by deploy/apply.sh,
+# which verifies it, reloads systemd and restarts -- and puts the previous
+# unit back if the service does not come up under the new one.
+#
+# The counterpart of running it by hand:
+#   python -m vinzor serve --workspace live.db --port 8000
+
+[Unit]
+Description=Vinzor Core - IFSCA compliance workspace
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Not root, and not the owner of the code either. /opt/vinzor belongs to
+# root and this user only reads it, so the process cannot rewrite its own
+# source; everything it writes is under /var/lib/vinzor.
+User=vinzor
+Group=vinzor
+
+# The working directory is the workspace, not the checkout, and that is
+# load-bearing: __main__.py reads .env relative to the working directory.
+# Sitting in /opt/vinzor would mean a .env that appeared in the checkout got
+# loaded silently. Nothing is ever meant to appear there -- .env is
+# gitignored -- but the directory the process sits in should not be the one
+# secrets would arrive in.
+WorkingDirectory=/var/lib/vinzor
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/vinzor
+
+# An absolute path on purpose. Amazon Linux 2023 ships 3.9 as `python3` and
+# installs the 3.11 the core requires here; naming it exactly means a
+# machine missing that package fails at start-up with a clear error rather
+# than running the product on an interpreter it does not support.
+ExecStart=/usr/bin/python3.11 -m vinzor serve --workspace /var/lib/vinzor/live.db --port 8000
+
+# The log is a single-writer SQLite file with WAL sidecars beside it. A
+# crash mid-append leaves a recoverable file, so coming straight back up is
+# right; three seconds is enough to avoid a tight restart loop hammering it.
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vinzor
+
+[Install]
+WantedBy=multi-user.target
