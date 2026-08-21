@@ -58,6 +58,13 @@ class EventType(StrEnum):
     OWNERSHIP_DECLARED = "OWNERSHIP_DECLARED"
     COMMITMENT_MADE = "COMMITMENT_MADE"
     SCREENING_COMPLETED = "SCREENING_COMPLETED"
+    #: The press, searched for a party's name alongside financial-crime
+    #: coverage, on a given day. An event rather than a lookup because the
+    #: news is not the same tomorrow: the finding rests on the articles that
+    #: were actually seen, and replay reads them back rather than asking
+    #: again. Recorded when nothing was found too -- an absent record is
+    #: indistinguishable from an absent check.
+    ADVERSE_MEDIA_CHECKED = "ADVERSE_MEDIA_CHECKED"
     PAYMENT_RECEIVED = "PAYMENT_RECEIVED"
     CASE_DECIDED = "CASE_DECIDED"
 

@@ -849,8 +849,27 @@ def main(argv: list[str] | None = None) -> int:
             # One sentence, at start-up. This used to be discovered per page
             # view, as a dropped connection with a traceback behind it.
             print(f"  cannot start: {wrong}", file=sys.stderr)
-            print("  Correct AZURE_OPENAI_REGION, or unset the assistant's "
-                  "settings to run without it.", file=sys.stderr)
+            # Which setting to correct depends on which provider objected,
+            # and this used to name AZURE_OPENAI_REGION either way. On a
+            # Bedrock-only box -- no Azure variables set at all -- the most
+            # natural mistake is VINZOR_BEDROCK_MODEL=apac.anthropic...,
+            # because apac.* is what AWS actually offers for Claude in
+            # Mumbai. The operator was then sent to correct a variable that
+            # did not exist in their environment, for a refusal that came
+            # from somewhere else entirely.
+            from . import providers
+
+            if providers.which() == "bedrock" or (
+                    os.environ.get("VINZOR_BEDROCK") or "").strip():
+                print("  Correct VINZOR_BEDROCK_REGION (an AWS region in "
+                      "India) or VINZOR_BEDROCK_MODEL -- a model id "
+                      "beginning apac., global. or us. is a cross-region "
+                      "profile and is refused, which rules out every "
+                      "Anthropic model in ap-south-1.", file=sys.stderr)
+            else:
+                print("  Correct AZURE_OPENAI_REGION, or unset the "
+                      "assistant's settings to run without it.",
+                      file=sys.stderr)
             return 1
         return 0
 

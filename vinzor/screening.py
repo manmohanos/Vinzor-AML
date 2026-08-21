@@ -374,6 +374,19 @@ class WatchlistClient:
                 "clean result, so nothing was recorded."
             ) from error
 
+        # The requested scope, and nothing else. There is deliberately no
+        # "but something else was current, so it probably worked" fallback:
+        # that was written here first, on the guess that a collection like
+        # "default" would not appear as a row of its own, and it defeated the
+        # whole guard. A service holding a current us_ofac_sdn and a stale
+        # eu_fsf would have accepted an empty answer from eu_fsf as a clean
+        # screen -- the exact false record this exists to prevent, reachable
+        # by a single wrong scope in the environment.
+        #
+        # The guess was also wrong. Checked against the deployed service:
+        # /catalog returns 477 rows and "default" is one of them, titled
+        # "OpenSanctions Default". Collections are rows. Nothing needs the
+        # fallback and it only ever weakened this.
         for dataset in held:
             if not isinstance(dataset, Mapping):
                 continue
@@ -381,13 +394,6 @@ class WatchlistClient:
                 continue
             if dataset.get("index_current") is False:
                 break
-            return
-
-        # A collection is also reachable as the parent of what is indexed:
-        # "default" is every list at once and is not itself a dataset row on
-        # every deployment. If anything at all is current, the search was
-        # real.
-        if any(isinstance(d, Mapping) and d.get("index_current") for d in held):
             return
 
         raise ScreeningUnavailable(
@@ -572,11 +578,22 @@ class WatchlistClient:
             # they expected should be able to see that the extra names were
             # the firm's own, not something this system invented.
             provenance["also_asked_about"] = list(also)
-        if len(queries) > 1:
+        if fuller:
             # Recorded so that an officer looking at more matches than they
             # expected can see why, and so an inspector can tell a thorough
             # check from a lucky one. The name we hold is the finding here as
             # much as anything the list returned.
+            #
+            # Gated on ``fuller`` -- the second spelling actually asked about
+            # -- not on the size of the batch. It was gated on the batch, and
+            # a batch grows for a second reason: a party with two aliases
+            # sends three queries and no second spelling at all. So a party
+            # recorded as "Priya Menon" with aliases, whose name is not
+            # abbreviated and was never re-asked, got a permanent record
+            # stating that "the name held for this party is abbreviated" and
+            # naming "" as the fuller form it was checked against. A false
+            # sentence about the firm's own record, on a hash-chained event,
+            # in the one place a provenance block exists to be trusted.
             provenance["asked_twice"] = {
                 "because": (
                     "the name held for this party is abbreviated, and an "

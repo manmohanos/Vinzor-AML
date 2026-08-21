@@ -70,6 +70,16 @@ KINDS: Mapping[str, tuple] = {
     "constitution": ("Constitutional documents",
                      ("name", "jurisdiction", "country_of_incorporation")),
     "proof_of_address": ("Proof of address", ("name", "address")),
+    # Added with requirements.py, which asks for documents rather than for
+    # attributes: a company owes proof that whoever signs may sign, and there
+    # was no kind on this list that such a paper could be filed as. An
+    # unnameable document becomes "other", and "other" evidences nothing --
+    # so the requirement could never have been satisfied by anything.
+    "partnership_deed": ("Partnership or LLP deed",
+                         ("name", "jurisdiction", "date_of_incorporation")),
+    "power_of_attorney": ("Power of attorney", ("name",)),
+    "ubo_declaration": ("Beneficial ownership declaration", ("name",)),
+    "source_of_funds": ("Source of funds evidence", ("name",)),
     # An unclassified file may be kept on the record and may evidence
     # nothing. That is not a gap in this list, it is the list working: a
     # document that genuinely proves a nationality is a passport, an

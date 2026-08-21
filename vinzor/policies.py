@@ -788,8 +788,79 @@ def reported_what_the_records_cannot_show(ctx: PolicyContext) -> Iterable[Findin
     )
 
 
+
+# ---------------------------------------------------------------------------
+# Adverse media
+# ---------------------------------------------------------------------------
+
+#: How many pieces of coverage make a file rather than a coincidence.
+#:
+#: The firm's number, not the regulator's -- IFSCA sets none, and this module
+#: says so rather than implying otherwise. One article naming a person is very
+#: often a namesake; a run of them from separate publications is the shape
+#: worth an officer's twenty minutes. Set low deliberately: the cost of
+#: reading three articles is small and the cost of not reading them is the
+#: whole reason a firm does this at all.
+ENOUGH_COVERAGE = 3
+
+#: Distinct publications, not distinct articles. Twelve syndications of one
+#: wire story is one story, and counting it as twelve is how a queue fills
+#: with the same fact.
+ENOUGH_SOURCES = 2
+
+
+def adverse_media_found(ctx: PolicyContext) -> Iterable[Finding]:
+    """Negative coverage of a party, put in front of a person.
+
+    Cited to clause 4.2 and described as a risk factor, because **there is no
+    IFSCA clause requiring an adverse media check** and inventing one would be
+    worse than having none. What 4.2 does is list what a firm shall take into
+    account when judging whether a customer is high risk, and press coverage
+    of fraud or corruption is plainly something a person weighing that would
+    want in front of them.
+
+    So this opens a file that says "read these and decide", never one that
+    says a party is bad. The articles are the finding; nothing here has read
+    them.
+    """
+    if ctx.event.event_type is not EventType.ADVERSE_MEDIA_CHECKED:
+        return ()
+    basis = ctx.event.payload.get("basis") or {}
+    articles = basis.get("articles") or []
+    if len(articles) < ENOUGH_COVERAGE:
+        return ()
+    sources = {str(a.get("domain") or "") for a in articles if a.get("domain")}
+    if len(sources) < ENOUGH_SOURCES:
+        return ()
+
+    name = ctx.graph.name_of(ctx.event.subject)
+    return (
+        Finding(
+            policy_id="POL_ADVERSE_MEDIA",
+            case_type=CASE_SCREENING_HIT,
+            severity=Severity.MEDIUM,
+            summary=f"press coverage naming {name} alongside financial crime",
+            # One open file per party per day of checking. Re-running the
+            # search on the same day extends the same file; running it next
+            # month opens a new one, which is right -- new coverage is a new
+            # fact about the world.
+            dedupe_key=f"adverse|{ctx.event.subject}|{ctx.event.occurred_at}",
+            detail={
+                "entity": ctx.event.subject,
+                "found": len(articles),
+                "sources": sorted(sources),
+                "window": basis.get("window"),
+                "searched_for": basis.get("query"),
+                "articles": articles[:10],
+            },
+            citations=cite("4.2"),
+        ),
+    )
+
+
 POLICIES: Sequence[Policy] = (
     screening_hit,
+    adverse_media_found,
     capital_short,
     reported_what_the_records_cannot_show,
     one_document_two_parties,

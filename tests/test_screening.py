@@ -679,12 +679,44 @@ def test_a_loaded_watchlist_still_records_a_clean_screen(engine):
     assert recorded, "a clean screen is still evidence and must be recorded"
 
 
-def test_a_collection_is_current_when_anything_under_it_is(engine):
-    """'default' is every list at once and is not itself a row on every
-    deployment. If the service holds current data, the search was real."""
+def test_another_dataset_being_current_does_not_vouch_for_this_one(engine):
+    """The hole in the first version of this guard, found by attacking it.
+
+    It fell back to "if anything at all is current, the search was real",
+    on the guess that a collection like "default" would not appear as a row
+    of its own. So a service holding a current us_ofac_sdn and a stale
+    eu_fsf accepted an empty answer from eu_fsf as a clean screen -- the
+    exact false record the guard exists to prevent, reachable by one wrong
+    scope in the environment.
+
+    The guess was wrong as well: the deployed service returns 477 rows and
+    "default" is one of them.
+    """
     person(engine, "p1", "Rohan Desai")
     client = WatchlistClient(
-        transport=unbuilt([{"name": "us_ofac_sdn", "index_current": True}]),
+        transport=unbuilt([{"name": "us_ofac_sdn", "index_current": True},
+                           {"name": "eu_fsf", "index_current": False}]),
+        scope="eu_fsf")
+    with pytest.raises(ScreeningUnavailable):
+        screen(engine, "p1", screened_at=WHEN, client=client)
+
+
+def test_a_scope_absent_from_the_catalogue_is_refused_however_busy_the_service(engine):
+    """A typo in VINZOR_SCREENING_SCOPE must not read as a clean book."""
+    person(engine, "p1", "Rohan Desai")
+    client = WatchlistClient(
+        transport=unbuilt([{"name": "default", "index_current": True}]),
+        scope="defualt")
+    with pytest.raises(ScreeningUnavailable):
+        screen(engine, "p1", screened_at=WHEN, client=client)
+
+
+def test_a_collection_named_in_the_catalogue_is_accepted(engine):
+    """The control: "default" is a row, and a current one is a real search."""
+    person(engine, "p1", "Rohan Desai")
+    client = WatchlistClient(
+        transport=unbuilt([{"name": "us_ofac_sdn", "index_current": True},
+                           {"name": "default", "index_current": True}]),
         scope="default")
     assert screen(engine, "p1", screened_at=WHEN, client=client)
 
@@ -718,3 +750,42 @@ def test_the_catalogue_is_not_read_when_something_matched(engine):
     screen(engine, "p1", screened_at=WHEN,
            client=WatchlistClient(transport=transport))
     assert transport.catalogue == [], "asked what it holds despite a match"
+
+
+def test_aliases_alone_do_not_claim_the_name_was_abbreviated(engine):
+    """A provenance block is the one thing on a screening record that must
+    never be decorative.
+
+    ``asked_twice`` was gated on the size of the query batch, and a batch
+    grows for two different reasons: a name held as initials, which really
+    is asked twice, and a party carrying aliases, which is not. So a party
+    recorded as "Priya Menon" -- fully spelled out -- with two aliases got a
+    permanent record saying "the name held for this party is abbreviated"
+    and naming "" as the fuller spelling it was checked against.
+    """
+    engine.ingest(event_type=EventType.ENTITY_REGISTERED, subject="p1",
+                  occurred_at=WHEN,
+                  payload={"kind": "PERSON", "name": "Priya Menon",
+                           "attributes": {"alias": "Priya Raghavan; Priya R Menon-Nair"}})
+    transport, calls = service()
+    client = WatchlistClient(transport=transport)
+    screen(engine, "p1", screened_at=WHEN, client=client)
+
+    asked = calls[0]["body"]["queries"]
+    assert len(asked) == 3, "the aliases should still be asked about"
+    basis = [e for e in engine.log
+             if e.event_type is EventType.SCREENING_COMPLETED][-1].payload
+    provenance = basis.get("basis") or basis
+    assert "also_asked_about" in json.dumps(provenance)
+    assert "asked_twice" not in json.dumps(provenance)
+
+
+def test_an_abbreviated_name_still_records_that_it_was_asked_twice(engine):
+    """The control. This record is worth having when it is true."""
+    person(engine, "p1", "R. Menon")
+    transport, _calls = service()
+    screen(engine, "p1", screened_at=WHEN,
+           client=WatchlistClient(transport=transport))
+    basis = [e for e in engine.log
+             if e.event_type is EventType.SCREENING_COMPLETED][-1].payload
+    assert "asked_twice" in json.dumps(basis)
