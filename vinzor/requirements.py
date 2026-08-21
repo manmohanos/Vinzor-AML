@@ -42,6 +42,27 @@ from typing import Iterable, Mapping, Optional
 from .model import EntityKind
 
 
+#: Sourced on 22 August 2026 against the pinned AML/CFT/KYC Guidelines and
+#: the PML (Maintenance of Records) Rules the Guidelines adopt, by reading
+#: the documents rather than by recalling them.
+#:
+#: **Six things could not be sourced and are therefore not here.** They are
+#: listed because a checklist is judged as much by what it leaves out:
+#: the FATCA and CRS self-certification, which rests on Income Tax Rule 114H
+#: and is tax law rather than these Guidelines; accredited-investor
+#: confirmations, whose circular this project has not pinned by digest; the
+#: KYC registration agency upload obligation, whose date this product asserts
+#: elsewhere and cannot cite; the certification requirements for a copy where
+#: originals cannot be produced, which the Guidelines express as "should"
+#: rather than "shall"; and whether the Guidance Notes bind in the same way
+#: as the numbered clauses, which several obligations here quietly turn on.
+#:
+#: Anything resting on a Guidance Note is marked ``mandatory=False``. That is
+#: the honest reading and it is deliberately the cautious one: a firm should
+#: be able to see which half of its own checklist is arguable.
+SOURCED_ON = "2026-08-22"
+
+
 @dataclass(frozen=True)
 class Requirement:
     """One thing a party owes, and what would satisfy it."""
@@ -77,7 +98,7 @@ def _person(extra: tuple[Requirement, ...] = ()) -> tuple[Requirement, ...]:
             because="it is the only thing that evidences who this person is, "
                     "rather than what they told us",
             satisfied_by=("passport", "driving_licence", "aadhaar"),
-            basis="5.4.2(a), 5.4.5",
+            basis="1.3.30 (what counts as an officially valid document); 5.4.3(c); Annexure II Part B(a); PML Rules 9(4)(a)",
         ),
         Requirement(
             slug="tax_number",
@@ -85,7 +106,7 @@ def _person(extra: tuple[Requirement, ...] = ()) -> tuple[Requirement, ...]:
             because="clause 5.4.2 wants an identifying number, and this is "
                     "the one an Indian record is built around",
             satisfied_by=("pan_card",),
-            basis="5.4.2(a)(ii)",
+            basis="Annexure II Part B(b); PML Rules 9(4)(b), which also accepts Form 60 where the customer holds no permanent account number",
         ),
         Requirement(
             slug="address",
@@ -94,7 +115,7 @@ def _person(extra: tuple[Requirement, ...] = ()) -> tuple[Requirement, ...]:
                     "clause 5.4.2 asks for the current one",
             satisfied_by=("proof_of_address", "utility_bill",
                           "bank_statement", "aadhaar", "driving_licence"),
-            basis="5.4.2(a)(vi)",
+            basis="5.4.2(a)(vi), which excludes a post office box; 5.4.3(c); 1.3.30 third proviso",
         ),
         Requirement(
             slug="source_of_funds",
@@ -103,7 +124,7 @@ def _person(extra: tuple[Requirement, ...] = ()) -> tuple[Requirement, ...]:
                     "single most common shape of a laundering file",
             satisfied_by=("source_of_funds", "bank_statement"),
             mandatory=False,
-            basis="4.2, 5.6 (enhanced measures where risk is high)",
+            basis="5.4.1(d) where necessary; 5.6(a)(ii) and 5.5 Guidance Note (2) make it mandatory for a high-risk customer or a politically exposed person",
         ),
     ) + extra
 
@@ -120,7 +141,7 @@ def _legal(constitution: tuple[str, ...],
                     "place it was registered, and a name on a letterhead is "
                     "not evidence of any of them",
             satisfied_by=constitution,
-            basis="5.4.2(b), 5.4.2(c)",
+            basis="5.4.2(b); 5.4.2(c), which also asks for the legal form, the constitution and the powers that bind the arrangement",
         ),
         Requirement(
             slug="tax_number",
@@ -147,7 +168,7 @@ def _legal(constitution: tuple[str, ...],
                     "sign it is not a subscription",
             satisfied_by=("board_resolution", "power_of_attorney",
                           "constitution"),
-            basis="PML Rules 9(3); AMLG 5.4.2(c)",
+            basis="PML Rules 9(3); 5.4.2(c)",
         ),
         Requirement(
             slug="signatory_identity",
@@ -156,7 +177,7 @@ def _legal(constitution: tuple[str, ...],
                     "5.4.2(a) applies to them exactly as it would if they "
                     "were investing themselves",
             satisfied_by=("passport", "driving_licence", "aadhaar"),
-            basis="5.4.2(c), PML Rules 9(3)",
+            basis="5.4.2(c); PML Rules 9(3), which asks for the identity of each person authorised to transact",
         ),
         Requirement(
             slug="beneficial_owners",
@@ -198,7 +219,7 @@ REQUIRED: Mapping[EntityKind, tuple[Requirement, ...]] = {
                         "from a beneficial owner, and clause 1.3.3(d) treats "
                         "them very differently",
                 satisfied_by=("trust_deed", "ubo_declaration"),
-                basis="PML Rules 9(1)(b) as adopted; AMLG 5.4.4(a) proviso",
+                basis="5.4.4(a) proviso; PML Rules 9(1)(b)",
             ),
         )),
     EntityKind.UNINCORPORATED_BODY: _legal(("constitution",)),

@@ -745,3 +745,17 @@ def plan_for(recipe: Recipe) -> tuple:
          "says": TOOLS[tool].says if tool in TOOLS else tool}
         for agent, tool in recipe.steps
     )
+
+
+# The onboarding tools live in their own module because the eight belong
+# together and the order they run in only makes sense read beside each other.
+# Registered here, at the bottom, rather than imported at the top: that module
+# imports Tool and Found from this one, so this import must happen after they
+# exist. A deferred import at module scope is the plainest way to say so.
+def _install_onboarding() -> None:
+    from . import onboarding
+
+    onboarding.install()
+
+
+_install_onboarding()

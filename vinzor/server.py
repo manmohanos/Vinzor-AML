@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import hashlib
+
 import os
 import re
 import sys
@@ -346,6 +348,127 @@ def build_app(engine: Vinzor, keys=None):
             """
             return (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https"
 
+        def _onboard(self, body: dict, entry) -> None:
+            """Take on a new investor: register them, then start the checks.
+
+            One call, because it is one intention. An officer with somebody
+            waiting should not have to create a record, find its reference and
+            then start a job against it -- that is this product's filing
+            system leaking into their afternoon.
+
+            The run is started and its reference returned at once. Nothing
+            waits for the checks: they take seconds, the officer watches them,
+            and each lands on the log as it finishes.
+            """
+            from .model import EntityKind, EventType
+
+            acting = self._who(body)
+            if acting is None:
+                self._problem("sign_in_first", HTTPStatus.UNAUTHORIZED)
+                return
+
+            name = str(body.get("name") or "").strip()[:200]
+            if not name:
+                self._problem("unavailable", HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                kind = EntityKind(str(body.get("kind") or "").strip().upper())
+            except ValueError:
+                self._problem("unavailable", HTTPStatus.BAD_REQUEST)
+                return
+
+            today = date.today().isoformat()
+            # Derived from what was typed, so onboarding the same party twice
+            # by accident extends one record rather than making two -- which
+            # is the mistake duplicates.py exists to find, and there is no
+            # sense manufacturing work for it.
+            party = "imp_" + hashlib.sha256(
+                ("%s|%s" % (name, kind.value)).encode("utf-8")).hexdigest()[:12]
+            attributes = {}
+            country = str(body.get("country") or "").strip().upper()[:2]
+            if country:
+                where = "nationality" if kind is EntityKind.PERSON else "jurisdiction"
+                attributes[where] = country
+            if party not in engine.state.graph.entities:
+                engine.ingest(
+                    event_type=EventType.ENTITY_REGISTERED,
+                    subject=party, occurred_at=today, actor=acting,
+                    payload={"kind": kind.value, "name": name,
+                             "attributes": attributes})
+
+            task_id = engine.give_task(recipe_key="onboard", actor=acting,
+                                       given_at=today, party=party)
+            self._json({"party_id": party, "task_id": task_id})
+            # Started after the reply, so the officer watches an empty plan
+            # fill in rather than waiting on a blank page for the whole run.
+            # The plan is already on the record; only the results are not.
+            threading.Thread(
+                target=self._run_quietly, args=(task_id, today, party),
+                daemon=True).start()
+
+        def _run_quietly(self, task_id: str, today: str, party: str) -> None:
+            """Run the checks, and never let one take the server with it."""
+            try:
+                engine.run_task(task_id, when=today, party=party)
+            except Exception as broke:      # noqa: BLE001
+                print("  an onboarding run stopped: %s: %s"
+                      % (type(broke).__name__, broke), file=sys.stderr)
+
+        def _onboarding(self, party: str) -> None:
+            """Everything an officer reads before deciding about this party.
+
+            Assembled here rather than concluded anywhere: what was checked,
+            what is outstanding, what was found, who is behind them, and the
+            three things only a person may do next. There is no overall
+            verdict in this payload and there is deliberately nowhere to put
+            one.
+            """
+            from .model import EntityKind
+            from .requirements import NOT_MODELLED, outstanding
+
+            if self._who() is None:
+                self._problem("sign_in_first", HTTPStatus.UNAUTHORIZED)
+                return
+            entity = engine.state.graph.entities.get(party)
+            if entity is None:
+                self._problem("not_found", HTTPStatus.NOT_FOUND)
+                return
+
+            still = outstanding(entity.kind,
+                                engine.state.papers.held_for(party))
+            open_files = [c for c in engine.queue() if c.subject == party]
+            answer = None
+            if entity.kind is not EntityKind.PERSON:
+                answer = engine.state.graph.resolve_ubo(party)
+
+            self._json({
+                "party": {"id": party, "name": entity.name,
+                          "kind": entity.kind.value if entity.kind else ""},
+                "outstanding": [
+                    {"asks_for": o.requirement.asks_for,
+                     "because": o.requirement.because,
+                     "mandatory": o.requirement.mandatory,
+                     "basis": o.requirement.basis,
+                     "held_but_unevidenced": o.held_but_unevidenced}
+                    for o in still],
+                "not_modelled": list(NOT_MODELLED),
+                "findings": [
+                    {"summary": c.evidence[0].summary if c.evidence else "",
+                     "severity": c.severity.value,
+                     "case_id": c.case_id,
+                     "case_type": c.case_type,
+                     "status": c.status.value}
+                    for c in open_files],
+                "ownership": ({
+                    "conclusion": answer.conclusion.value,
+                    "explains": answer.explain(),
+                    "owners": [{"name": o.name,
+                                "percentage": round(o.effective_percentage, 1)}
+                               for o in answer.owners],
+                    "cycles": [list(c) for c in answer.cycles],
+                } if answer is not None else None),
+            })
+
         def _set_cookie(self, token: str, ending: bool = False) -> None:
             bits = [f"{self.COOKIE}={token}", "Path=/", "HttpOnly",
                     "SameSite=Strict"]
@@ -534,6 +657,8 @@ def build_app(engine: Vinzor, keys=None):
                 self._record(route[len("/api/records/"):])
             elif route.startswith("/api/parties/"):
                 self._party(route[len("/api/parties/"):])
+            elif route.startswith("/api/onboarding/"):
+                self._onboarding(unquote(route[len("/api/onboarding/"):]))
             elif route == "/api/screening":
                 payload = _encode(screening(engine, date.today().isoformat()))
                 payload["ui"] = UI
@@ -1123,7 +1248,7 @@ def build_app(engine: Vinzor, keys=None):
             if route not in ("/api/decisions", "/api/confirmations",
                              "/api/ask", "/api/checks", "/api/imports",
                              "/api/imports/apply", "/api/risk", "/api/tasks",
-                             "/api/filings", "/api/chat"):
+                             "/api/filings", "/api/chat", "/api/onboarding"):
                 self._problem("not_found", HTTPStatus.NOT_FOUND)
                 return
             cap = MAX_SHEET_BYTES if route == "/api/imports" else MAX_BODY_BYTES
@@ -1245,6 +1370,9 @@ def build_app(engine: Vinzor, keys=None):
                 return
             if route == "/api/filings":
                 self._filed(body)
+                return
+            if route == "/api/onboarding":
+                self._onboard(body, entry)
                 return
             reason = (body.get("reason") or "").strip()
             if not reason:
