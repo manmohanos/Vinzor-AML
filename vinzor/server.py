@@ -537,6 +537,97 @@ def build_app(engine: Vinzor, keys=None):
                 print("  onboarding could not read the press: %s: %s"
                       % (type(broke).__name__, broke), file=sys.stderr)
 
+        def _file_document(self, party: str) -> None:
+            """Put a document on a party's record during onboarding.
+
+            The wizard's second step is the whole trick of this product: it
+            shows only what is still outstanding, and the list shrinks as
+            papers arrive. Without somewhere to send them the step was a drop
+            zone that accepted a file and told the officer nothing here could
+            file it -- which is worse than not offering one.
+
+            The bytes arrive raw with the name in the query string rather
+            than as a multipart form, for the reason ``/api/imports`` already
+            does it that way: a form post is the one cross-site request a
+            browser will send without script, and requiring a content type a
+            form cannot set is the second CSRF layer this server relies on.
+
+            **What the document evidences is not asserted here.** The kind is
+            taken from what the officer chose, and ``documents.refuse``
+            decides whether a kind like that could support anything at all;
+            saying it *does* support a nationality is a person's assertion
+            and belongs to the screen that asks them. A file arrives held and
+            unevidenced, which is exactly the state clause 5.4.5 exists to
+            distinguish, and the outstanding list says so in those words.
+            """
+            from .documents import KINDS
+
+            acting = self._who()
+            if acting is None:
+                self._problem("sign_in_first", HTTPStatus.UNAUTHORIZED)
+                return
+            if party not in engine.state.graph.entities:
+                self._problem("not_found", HTTPStatus.NOT_FOUND)
+                return
+
+            asked = {}
+            if "?" in self.path:
+                from urllib.parse import parse_qs, urlsplit
+
+                asked = parse_qs(urlsplit(self.path).query)
+            filename = (asked.get("filename") or [""])[0][:200]
+            kind = (asked.get("kind") or ["other"])[0].strip().lower()
+            if kind not in KINDS:
+                kind = "other"
+
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                self._problem("unavailable", HTTPStatus.BAD_REQUEST)
+                return
+            if length <= 0 or length > MAX_SHEET_BYTES:
+                self._problem("unavailable", HTTPStatus.BAD_REQUEST)
+                return
+            data = self.rfile.read(length)
+
+            try:
+                engine.file_document(
+                    entity_id=party, kind=kind,
+                    filename=filename or "a document",
+                    data=data, supports=(), actor=acting,
+                    filed_on=date.today().isoformat(),
+                    cabinet=self._cabinet())
+            except ValueError as refused:
+                # documents.refuse says why in a sentence -- the bytes are not
+                # what the name claims, the kind is not one we can hold, the
+                # file is empty. All of those are the officer's to act on.
+                self._json({"filed": False, "said": str(refused)},
+                           HTTPStatus.BAD_REQUEST)
+                return
+            except KeyError:
+                self._problem("not_found", HTTPStatus.NOT_FOUND)
+                return
+
+            self._json({"filed": True, "filename": filename, "kind": kind})
+
+        def _cabinet(self):
+            """Where the bytes live: in the workspace file, beside the log.
+
+            A twenty-megabyte scan inside an append-only log is a log nobody
+            can replay, so the fingerprint goes on the record and the file
+            goes in a table next to it -- the same division credentials make.
+            One file per workspace still, which is what tenant isolation
+            here rests on.
+
+            Built the way __main__.py already builds one, which is by handing
+            Cabinet the workspace path itself. Giving it a path of its own
+            would put a firm's scanned passports in a second file that the
+            workspace boundary does not cover.
+            """
+            from .documents import Cabinet
+
+            return Cabinet(getattr(engine.log, "path", ":memory:"))
+
         def _onboarding(self, party: str) -> None:
             """Everything an officer reads before deciding about this party.
 
@@ -1369,6 +1460,12 @@ def build_app(engine: Vinzor, keys=None):
                 return
             if route in ("/api/sign-in", "/api/sign-out"):
                 self._doorway(route)
+                return
+            if route.startswith("/api/onboarding/") and route.endswith("/documents"):
+                # Raw bytes, not JSON: handled before the body is read, since
+                # nothing here should try to parse a PDF as an object.
+                self._file_document(
+                    route[len("/api/onboarding/"):-len("/documents")])
                 return
             if route not in ("/api/decisions", "/api/confirmations",
                              "/api/ask", "/api/checks", "/api/imports",

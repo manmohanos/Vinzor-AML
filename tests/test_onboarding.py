@@ -226,3 +226,52 @@ def test_identification_says_which_clause_each_gap_is(engine):
     identification = ran["identification"]
     assert identification["how"] == FOUND_SOMETHING
     assert any("5.4.2" in d for d in identification["details"])
+
+
+# -- the wizard's second step, over HTTP --------------------------------------
+
+
+def test_a_document_arrives_held_and_unevidenced(engine):
+    """The whole of clause 5.4.5 in one assertion.
+
+    Dropping a passport into the wizard puts it on the record. It does NOT
+    satisfy the requirement, because nobody has yet said what it evidences --
+    and that is a different state from missing, with a different remedy: an
+    officer looks at a document already on the file rather than writing to
+    the investor again.
+
+    Reported as missing it would send the wrong letter. Reported as satisfied
+    it would give the firm a book that looks complete and cannot be defended.
+    """
+    from vinzor.model import EntityKind
+    from vinzor.requirements import outstanding
+
+    person(engine, "p1", "Anand Bhat")
+    engine.file_document(entity_id="p1", kind="passport",
+                         filename="passport.pdf", data=b"%PDF-1.4 scan",
+                         supports=(), actor="Meera Nair", filed_on=WHEN)
+
+    still = {o.requirement.slug: o
+             for o in outstanding(EntityKind.PERSON,
+                                  engine.state.papers.held_for("p1"))}
+    assert "identity" in still, "a scan nobody has read does not satisfy 5.4.5"
+    assert still["identity"].held_but_unevidenced is True
+    assert still["tax_number"].held_but_unevidenced is False
+
+
+def test_saying_what_it_evidences_is_what_settles_the_requirement(engine):
+    """And the other half: once a person asserts what the document shows,
+    the requirement is answered. That assertion is a person's, which is why
+    it is a separate act from filing the file."""
+    from vinzor.model import EntityKind
+    from vinzor.requirements import outstanding
+
+    person(engine, "p1", "Anand Bhat")
+    engine.file_document(entity_id="p1", kind="passport",
+                         filename="passport.pdf", data=b"%PDF-1.4 scan",
+                         supports=("name", "dob", "nationality"),
+                         actor="Meera Nair", filed_on=WHEN)
+    still = {o.requirement.slug for o
+             in outstanding(EntityKind.PERSON,
+                            engine.state.papers.held_for("p1"))}
+    assert "identity" not in still

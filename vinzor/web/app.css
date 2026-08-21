@@ -39,7 +39,14 @@
   --stop-wash: #fef2f2;
   --today: #b45309;
   --today-wash: #fffbeb;
-  --week: #4f46e5;
+  /* Slate, not the accent. This was #4f46e5 -- byte-identical to --indigo,
+     the colour that means "selected", "current" and "press me" everywhere
+     else in the product. So the severity ladder an untrained officer has to
+     read ran red -> amber -> the primary action colour -> grey, and MEDIUM
+     looked like a highlighted row. A colour cannot be decorative and
+     semantic at once. */
+  --week: #475569;
+  --week-wash: #f1f5f9;
   --later: #6b7280;
   --later-wash: #f3f4f6;
   --settled: #047857;
@@ -333,7 +340,7 @@ input::placeholder, textarea::placeholder { color: #9aa2af; }
 }
 .badge[data-tone="stop"] { background: var(--stop-wash); color: var(--stop); }
 .badge[data-tone="today"] { background: var(--today-wash); color: var(--today); }
-.badge[data-tone="week"] { background: var(--indigo-wash); color: var(--indigo-dark); }
+.badge[data-tone="week"] { background: var(--week-wash); color: var(--week); }
 .badge[data-tone="later"] { background: var(--later-wash); color: var(--ink-soft); }
 .badge[data-tone="good"] { background: var(--settled-wash); color: var(--settled); }
 
