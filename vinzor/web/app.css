@@ -1599,3 +1599,29 @@ table.grid.standing td { padding: 7px 12px 7px 0; vertical-align: middle; }
 }
 .candidate-table tr[data-verdict="same"] .candidate-field { color: var(--stop); }
 .candidate-note { color: var(--ink-soft); margin-top: 7px; }
+
+/* Documents dropped and not yet named. They sit here until somebody says
+   what each one is, because the kind decides what it may evidence. */
+.waiting { list-style: none; margin: 8px 0 12px; padding: 0; }
+.waiting li {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(180px, auto);
+  gap: 4px 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.waiting li:last-child { border-bottom: 0; }
+.waiting-name { font-weight: 550; color: var(--ink); overflow-wrap: anywhere; }
+.waiting select {
+  font: inherit;
+  font-size: 14px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  max-width: 100%;
+}
+.waiting select:hover { border-color: var(--accent); }
+.waiting li > .tiny { grid-column: 1 / -1; }

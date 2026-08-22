@@ -789,3 +789,54 @@ def test_two_different_entries_sharing_a_name_are_both_listed(workspace):
     dates = {row["theirs"] for entry in found for row in entry["compared"]
              if row["label"] == "Date of birth"}
     assert dates == {"1952-10-07", "2019"}
+
+
+def test_the_screen_is_told_what_kinds_of_document_there_are(workspace):
+    """The upload posted no kind at all, so every document filed through the
+    interface arrived as "other" -- and "other" is allowed to evidence
+    nothing. The reader then answered every single one with "this system
+    does not know what a document of that kind is allowed to evidence",
+    which reads as a broken product and was a missing question.
+
+    The screen cannot ask it without knowing the answers, and the answers
+    belong to documents.KINDS rather than to a list retyped in JavaScript.
+    """
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    offered = body.get("kinds") or []
+    assert offered, "the screen has no way to ask what a document is"
+
+    from vinzor.documents import KINDS
+
+    values = {one["value"] for one in offered}
+    assert "passport" in values and "utility_bill" in values
+    assert "other" not in values, (
+        "'other' evidences nothing, so offering it is offering a document "
+        "that cannot be read")
+    for one in offered:
+        assert one["label"] == KINDS[one["value"]][0]
+        assert one["evidences"], (
+            "a kind that evidences nothing should not be on the list")
+
+
+def test_what_a_kind_may_evidence_is_said_in_words_a_person_uses(workspace):
+    """"id_document_number" is not a phrase anybody says out loud, and this
+    list is shown to an officer choosing what a document is."""
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    passport = [k for k in body["kinds"] if k["value"] == "passport"][0]
+    assert "date of birth" in passport["evidences"]
+    assert "document number" in passport["evidences"]
+    for one in body["kinds"]:
+        for said in one["evidences"]:
+            assert "_" not in said, f"{said!r} is a field name, not a phrase"

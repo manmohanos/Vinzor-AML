@@ -1104,10 +1104,20 @@
     var where = frame("onboard");
     busy(where);
     var added = [];
+    /* Files that have been dropped and not yet named. Nothing is sent until
+       somebody says what each one is, because the kind decides what a
+       document is allowed to evidence. */
+    var waiting = [];
+    var kinds = [];
 
     function draw(record) {
       var party = record.party || {};
       var owed = record.outstanding || [];
+      /* What kinds of paper there are, and what each may evidence. From the
+         server, because documents.KINDS decides it and a second opinion
+         about that on the screen would be a second opinion about what a
+         document proves. */
+      kinds = record.kinds || [];
       mount(where, h`
         <div class="wizard">
           ${stepBar(1)}
@@ -1125,6 +1135,7 @@
                 }<input type="file" id="pick" multiple></label>
               </p>
             </div>
+            <div id="waiting"></div>
             <ul class="filed" id="filed"></ul>
           </div>
 
@@ -1276,18 +1287,136 @@
       pick.addEventListener("change", function () { take(pick.files); });
     }
 
-    /* Each file is sent, and then the whole record is read back from the
-       server. The outstanding list shrinks because the server says it has,
-       never because this file counted something. */
+    /* What a filename usually means. A table, not a guess a model makes:
+       the same file dropped twice has to offer the same kind, and an
+       officer has to be able to see what it looks for.
+
+       It only ever *pre-selects*. Nothing is filed on the strength of a
+       filename -- the kind decides which fields a document is allowed to
+       evidence, which is an assertion about the paper, and a person makes
+       it. */
+    var NAME_HINTS = [
+      ["passport", "passport"],
+      ["aadhaar", "aadhaar"], ["aadhar", "aadhaar"],
+      ["pan", "pan_card"],
+      ["licence", "driving_licence"], ["license", "driving_licence"],
+      ["utility", "utility_bill"], ["electric", "utility_bill"],
+      ["bank", "bank_statement"], ["statement", "bank_statement"],
+      ["incorporat", "incorporation"], ["moa", "constitution"],
+      ["board", "board_resolution"], ["resolution", "board_resolution"],
+      ["deed", "trust_deed"], ["trust", "trust_deed"],
+      ["partnership", "partnership_deed"], ["llp", "partnership_deed"],
+      ["register", "register_of_members"],
+      ["poa", "proof_of_address"], ["address", "proof_of_address"],
+      ["attorney", "power_of_attorney"],
+      ["id", "national_id"], ["identity", "national_id"]
+    ];
+
+    function guessKind(filename, kinds) {
+      var lower = (filename || "").toLowerCase();
+      var known = {};
+      (kinds || []).forEach(function (k) { known[k.value] = true; });
+      for (var i = 0; i < NAME_HINTS.length; i++) {
+        if (lower.indexOf(NAME_HINTS[i][0]) >= 0 && known[NAME_HINTS[i][1]]) {
+          return NAME_HINTS[i][1];
+        }
+      }
+      return "";
+    }
+
+    /* Files wait here until somebody says what they are.
+
+       They used to be sent the moment they were dropped, with no kind on
+       the request at all -- so every document filed through this screen
+       arrived as "other", and "other" is allowed to evidence nothing. The
+       reader then answered every single upload with "this system does not
+       know what a document of that kind is allowed to evidence", which
+       reads as a broken product and was in fact a missing question.
+
+       The question is not a formality. documents.KINDS decides what a kind
+       of paper may prove -- a utility bill may offer an address and may not
+       offer a nationality, however clearly it prints one -- so the answer
+       is an assertion about the document, and assertions belong to people. */
+
+    function drawWaiting() {
+      var where = document.getElementById("waiting");
+      if (!where) { return; }
+      if (!waiting.length) { mount(where, ""); return; }
+      mount(where, h`
+        <p class="small">${word("onboard_name_the_kind", "")}</p>
+        <ul class="waiting">${waiting.map(function (item, index) {
+          return h`<li>
+            <span class="waiting-name">${item.file.name}</span>
+            <select data-at="${index}" aria-label="${
+              word("onboard_kind_label", "What kind of document is this?")
+            }">
+              <option value="">${word("onboard_kind_choose", "Choose…")}</option>
+              ${(kinds || []).map(function (k) {
+                return h`<option value="${k.value}"${
+                  k.value === item.kind ? raw(" selected") : ""
+                }>${k.label}</option>`;
+              })}
+            </select>
+            <span class="tiny faint">${
+              item.kind ? evidencedBy(item.kind) : ""
+            }</span>
+          </li>`;
+        })}</ul>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="file-them"${
+            waiting.every(function (i) { return i.kind; }) ? "" : raw(" disabled")
+          }>${word("onboard_file_them", "File these")}</button>
+          <button type="button" class="btn btn-quiet" id="drop-them">${
+            word("onboard_forget_them", "Not these")
+          }</button>
+        </div>`);
+
+      where.querySelectorAll("select").forEach(function (select) {
+        select.addEventListener("change", function () {
+          waiting[Number(select.getAttribute("data-at"))].kind = select.value;
+          drawWaiting();
+        });
+      });
+      var go = document.getElementById("file-them");
+      if (go) { go.addEventListener("click", send); }
+      var no = document.getElementById("drop-them");
+      if (no) {
+        no.addEventListener("click", function () { waiting = []; drawWaiting(); });
+      }
+    }
+
+    function evidencedBy(value) {
+      var found = (kinds || []).filter(function (k) { return k.value === value; })[0];
+      if (!found || !(found.evidences || []).length) { return ""; }
+      return word("onboard_kind_evidences", "Can evidence:") + " " +
+             found.evidences.join(", ");
+    }
+
     function take(files) {
       var list = Array.prototype.slice.call(files || []);
       if (!list.length) { return; }
       list.forEach(function (file) {
-        var row = { name: file.name, state: word("onboard_sending", "…"), tone: "plain" };
+        waiting.push({ file: file, kind: guessKind(file.name, kinds) });
+      });
+      drawWaiting();
+    }
+
+    /* Each file is sent with the kind a person chose for it, and then the
+       whole record is read back from the server. The outstanding list
+       shrinks because the server says it has, never because this screen
+       counted something. */
+    function send() {
+      var going = waiting.slice();
+      waiting = [];
+      drawWaiting();
+      going.forEach(function (item) {
+        var row = { name: item.file.name,
+                    state: word("onboard_sending", "…"), tone: "plain" };
         added.push(row);
         drawFiled();
         postBytes("/api/onboarding/" + encodeURIComponent(partyId) +
-                  "/documents?filename=" + encodeURIComponent(file.name), file)
+                  "/documents?filename=" + encodeURIComponent(item.file.name) +
+                  "&kind=" + encodeURIComponent(item.kind), item.file)
           .then(function (reply) {
             row.state = word("onboard_added", "Added");
             row.tone = "good";

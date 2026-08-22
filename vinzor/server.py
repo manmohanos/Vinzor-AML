@@ -83,6 +83,25 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+#: What a field is called when a person reads it. ``documents.KINDS`` names
+#: the fields a kind of paper may evidence, and those names are the record's
+#: own -- "id_document_number" is not a phrase anybody says out loud.
+_FIELD_NAMES = {
+    "name": "name",
+    "dob": "date of birth",
+    "nationality": "nationality",
+    "id_document_number": "document number",
+    "address": "address",
+    "pan": "permanent account number",
+    "cin": "corporate identity number",
+    "date_of_incorporation": "date of incorporation",
+    "country_of_incorporation": "country of incorporation",
+    "jurisdiction": "jurisdiction",
+    "trust_type": "kind of trust",
+    "expires": "expiry date",
+}
+
+
 WORKSPACE = "Acme GIFT Fund Managers Ltd"
 
 #: A decision is a few hundred bytes: a name, a file, an outcome, a reason.
@@ -725,6 +744,7 @@ def build_app(engine: Vinzor, keys=None):
             verdict in this payload and there is deliberately nowhere to put
             one.
             """
+            from .documents import KINDS
             from .model import EntityKind
             from .requirements import NOT_MODELLED, outstanding
 
@@ -754,6 +774,20 @@ def build_app(engine: Vinzor, keys=None):
                      "held_but_unevidenced": o.held_but_unevidenced}
                     for o in still],
                 "not_modelled": list(NOT_MODELLED),
+                # What kinds of document there are, and what each is allowed
+                # to evidence. The screen had no way to ask: it posted every
+                # upload with no kind at all, which defaulted to "other",
+                # and "other" evidences nothing -- so no document filed
+                # through the interface could ever be read, and the reader
+                # answered every one of them with "this system does not know
+                # what a document of that kind is allowed to evidence".
+                "kinds": [
+                    {"value": key, "label": KINDS[key][0],
+                     "evidences": [_FIELD_NAMES.get(f, f)
+                                   for f in KINDS[key][1]]}
+                    for key in sorted(KINDS, key=lambda k: KINDS[k][0])
+                    if key != "other"
+                ],
                 # Each finding carries the clause **and its words**. A file
                 # saying "clause 5.4.2" and nothing else is the shape of an
                 # answer nobody can check: the officer cannot tell whether

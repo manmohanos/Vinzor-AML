@@ -691,6 +691,23 @@ UI = {
         "an alert like this is closed — record which detail, and why it "
         "satisfied you."
     ),
+    # Naming a document. This was not asked at all: every upload went up
+    # with no kind on it, arrived as "other", and "other" may evidence
+    # nothing -- so the reader answered every document filed through the
+    # screen with "this system does not know what a document of that kind
+    # is allowed to evidence". It read as a broken product and it was a
+    # missing question.
+    "onboard_name_the_kind": (
+        "Say what each of these is before it is filed. What a document is "
+        "decides what it is allowed to prove — a utility bill may evidence "
+        "an address and may not evidence a nationality, however clearly it "
+        "prints one — so this is your assertion about the paper, not ours."
+    ),
+    "onboard_kind_label": "What kind of document is this?",
+    "onboard_kind_choose": "Choose…",
+    "onboard_kind_evidences": "Can evidence:",
+    "onboard_file_them": "File these",
+    "onboard_forget_them": "Not these",
     "read_field_name": "Name",
     "read_field_dob": "Date of birth",
     "read_field_nationality": "Nationality",
