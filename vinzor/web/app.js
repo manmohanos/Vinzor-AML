@@ -296,7 +296,7 @@
     mount(app, h`
       <nav class="rail">
         <div class="rail-mark">
-          ${mark(22)}<span>${word("wordmark", "Vinzor")}</span>
+          ${mark(30)}<span>${word("wordmark", "Vinzor")}</span>
         </div>
         <div class="rail-place">${workspace}</div>
         <div class="rail-nav">

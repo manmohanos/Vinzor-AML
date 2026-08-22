@@ -79,8 +79,31 @@
   --settled: #047857;
   --settled-wash: #e8f4ec;
 
-  --radius: 8px;
+  /* Curves, on a scale rather than one value. The rule is that the radius
+     grows with the thing: a badge is rounder than a button, a button is
+     rounder than the card holding it, and the card is rounder than the page.
+     A single radius used on everything is the flat tell -- an 8px corner
+     reads as generous on a chip and as an unfinished square on a panel. */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --pill: 999px;
+
   --whisper: 0 1px 2px rgba(10, 10, 11, 0.05);
+  /* Raised, for the moment a pointer is over something. Two shadows, not
+     one: a tight dark contact shadow so the edge stays crisp, and a wide
+     soft one for the lift. A single blurred shadow makes a card look like
+     it is underwater rather than off the page. */
+  --lift: 0 1px 2px rgba(10, 10, 11, 0.06),
+          0 6px 16px -4px rgba(10, 10, 11, 0.10);
+
+  /* Motion. The curve is decelerating and asymmetric -- fast to leave, slow
+     to arrive -- which is what makes a hover feel answered rather than
+     animated. Nothing here moves further than a pixel or two: on a screen
+     somebody reads all day, motion is feedback, not decoration. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --quick: 140ms;
+
   --rail-width: 220px;
 
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -112,11 +135,14 @@ p { margin: 0; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* One focus ring everywhere, and it is always visible. */
+/* One focus ring everywhere, and it is always visible. Its corner follows the
+   curve of what it is ringing: a 4px outline around a 16px card reads as a
+   square drawn on top of a rounded one, which is the detail that makes
+   keyboard use look unfinished. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .skip {
@@ -157,15 +183,19 @@ a:hover { text-decoration: underline; }
   z-index: 10;
 }
 
+/* The name, at the size a name should be. It was set at 17px -- smaller than
+   the greeting on the home screen and barely larger than the nav beneath it,
+   so the one word identifying whose product this is sat lowest in the
+   hierarchy of its own sidebar. */
 .rail-mark {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 17px;
+  gap: 10px;
+  font-size: 22px;
   font-weight: 650;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   color: var(--ink);
-  padding: 0 18px 4px;
+  padding: 0 18px 10px;
 }
 
 /* The mark takes its colour from whatever it sits in, so one set of paths
@@ -1363,4 +1393,105 @@ table.grid.standing td { padding: 7px 12px 7px 0; vertical-align: middle; }
   .confidential { border-left-width: 3px; border-left-color: #000; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 10px;
                            word-break: break-all; }
+}
+
+/* ---------- answering the pointer -----------------------------------------
+
+   Until now this stylesheet had exactly one transition in it, so every
+   surface on the product was inert: a card, a button and a paragraph all
+   behaved identically under the pointer, which leaves an officer guessing
+   what is clickable by reading rather than by moving.
+
+   The rule followed here is that anything you can act on says so when you
+   are over it, and says it the same way everywhere: it lifts a little, its
+   border firms up, and it settles back down when pressed. Nothing changes
+   size on hover -- a control that grows under the pointer moves the thing
+   you were aiming at, and on a dense screen that is worse than no feedback
+   at all. The movement is one pixel of translation and a shadow.
+
+   Colour is not used for any of it. Every hue on this page already means
+   something specific about urgency, and a hover that borrowed one would be
+   the fifth thing red is trying to say. */
+
+.btn,
+.tally li,
+.bands a,
+.ask-tries button,
+.rail-nav a,
+.kind,
+.chips li,
+.card {
+  transition:
+    background-color var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease),
+    transform var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+/* Buttons. The press is the half that is usually left out, and it is the
+   half that makes a control feel like a physical thing rather than a link
+   that changed colour. */
+.btn { border-radius: var(--radius-sm); }
+.btn:hover { box-shadow: var(--lift); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); box-shadow: var(--whisper); }
+.btn[disabled]:hover { transform: none; box-shadow: none; }
+.btn-quiet:hover { box-shadow: none; transform: none; }
+.btn-big { border-radius: var(--radius); }
+
+/* The five counts, and the pills under them. These are figures rather than
+   controls, so they lift without pretending to be pressable -- except the
+   bands, which are links and get the full treatment. */
+.tally li:hover { box-shadow: var(--lift); transform: translateY(-1px); }
+
+.bands a:hover { box-shadow: var(--lift); transform: translateY(-1px); }
+.bands a:active { transform: translateY(0); box-shadow: none; }
+
+.ask-tries button { transition-duration: var(--quick); }
+.ask-tries button:hover {
+  background: var(--card);
+  box-shadow: var(--whisper);
+  transform: translateY(-1px);
+}
+.ask-tries button:active { transform: translateY(0); box-shadow: none; }
+
+/* The rail. A nav item already had a hover fill; what it lacked was the
+   easing, so it snapped. */
+.rail-nav a { border-radius: var(--radius-sm); }
+
+/* The onboarding choices are the largest hit targets in the product and the
+   first thing a new officer touches, so they get the clearest response. */
+.kind:hover { box-shadow: var(--lift); transform: translateY(-1px); }
+.kind:active { transform: translateY(0); box-shadow: var(--whisper); }
+
+/* Curves, applied where a square corner was left behind. */
+.card { border-radius: var(--radius-lg); }
+.tally li,
+.chat-form textarea,
+.drop { border-radius: var(--radius); }
+.badge, .chips li { border-radius: var(--pill); }
+
+/* The drop zone answers the pointer too -- it is a target you aim a file at,
+   and a dashed rectangle that does nothing until the file lands gives no
+   sign it is the right rectangle. */
+.drop { transition: border-color var(--quick) var(--ease),
+                    background-color var(--quick) var(--ease); }
+.drop:hover { border-color: var(--accent); background: var(--sunk); }
+
+/* Rows in a list are not buttons, so they tint rather than lift. */
+.strip li, .owed li, .filed li {
+  transition: background-color var(--quick) var(--ease);
+  border-radius: var(--radius-sm);
+}
+
+/* Somebody who has asked for less movement gets the colour and the shadow
+   and none of the travel. The feedback survives; the motion does not. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .btn:hover, .tally li:hover, .bands a:hover,
+  .ask-tries button:hover, .kind:hover { transform: none; }
 }
