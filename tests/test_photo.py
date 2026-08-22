@@ -245,3 +245,29 @@ def test_with_no_model_a_picture_still_says_what_it_is():
     reading = parse(JPEG, kind="passport")
     assert not reading.proposals
     assert reading.unreadable
+
+
+# -- the size a real document actually is -------------------------------------
+
+
+def test_a_document_route_is_allowed_a_photograph_sized_body():
+    """The upload route was inheriting the JSON body cap -- 64 KB, sized for
+    "a decision is a few hundred bytes". Every hand-written PDF in the demo
+    pack is about a kilobyte, so nothing caught it, and the first real
+    passport anybody photographed was refused with a sentence about nothing
+    having been recorded.
+    """
+    from vinzor.server import (MAX_BODY_BYTES, MAX_DOCUMENT_BYTES,
+                               MAX_SHEET_BYTES, _ceiling_for)
+
+    documents = "/api/onboarding/per_0001/documents"
+    assert _ceiling_for(documents) == MAX_DOCUMENT_BYTES
+    assert _ceiling_for(documents) > 5 * 1024 * 1024, (
+        "a photographed passport is a few hundred kilobytes and a scanned "
+        "bank statement is several megabytes")
+
+    # The other two are unchanged, and a document may not be a spreadsheet.
+    assert _ceiling_for("/api/imports") == MAX_SHEET_BYTES
+    assert _ceiling_for("/api/decisions") == MAX_BODY_BYTES
+    assert _ceiling_for("/api/chat") == MAX_BODY_BYTES
+    assert MAX_DOCUMENT_BYTES < MAX_SHEET_BYTES

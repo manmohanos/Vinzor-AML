@@ -102,6 +102,29 @@ GATHER_SECONDS = 30
 #: years of statement lines; anything past it is not a sheet a person read.
 MAX_SHEET_BYTES = 20 * 1024 * 1024
 
+#: A document is allowed to be a photograph.
+#:
+#: This route was inheriting ``MAX_BODY_BYTES``, which is sized for "a
+#: decision is a few hundred bytes" -- so every upload over 64 KB was refused
+#: with the sentence about nothing having been recorded. It went unnoticed
+#: because the pack this was built against is hand-written PDFs of about a
+#: kilobyte each. A real passport photographed on a phone is a few hundred
+#: kilobytes, and the first genuine document anybody tried was rejected.
+MAX_DOCUMENT_BYTES = 15 * 1024 * 1024
+
+
+def _ceiling_for(route: str) -> int:
+    """How large a body this route is allowed to have.
+
+    One place, because there were two of these checks reading the same
+    expression and a third route that needed a different answer from both.
+    """
+    if route == "/api/imports":
+        return MAX_SHEET_BYTES
+    if route.startswith("/api/onboarding/") and route.endswith("/documents"):
+        return MAX_DOCUMENT_BYTES
+    return MAX_BODY_BYTES
+
 #: How many uploaded sheets are held awaiting confirmation. Comfortably more
 #: than anyone reads at once, and a bound rather than none at all: an
 #: officer who opens twenty files and confirms one should not leave the
@@ -1659,7 +1682,7 @@ def build_app(engine: Vinzor, keys=None):
             except ValueError:
                 self._problem("unavailable", HTTPStatus.BAD_REQUEST)
                 return
-            ceiling = MAX_SHEET_BYTES if route == "/api/imports" else MAX_BODY_BYTES
+            ceiling = _ceiling_for(route)
             if declared < 0 or declared > ceiling:
                 self._drain()
                 self.close_connection = True
@@ -1686,7 +1709,7 @@ def build_app(engine: Vinzor, keys=None):
                              "/api/filings", "/api/chat", "/api/onboarding"):
                 self._problem("not_found", HTTPStatus.NOT_FOUND)
                 return
-            cap = MAX_SHEET_BYTES if route == "/api/imports" else MAX_BODY_BYTES
+            cap = _ceiling_for(route)
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
