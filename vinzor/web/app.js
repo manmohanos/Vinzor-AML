@@ -1210,7 +1210,7 @@
               <h2>${word("onboard_owed", "Still outstanding")}</h2>
               <span class="badge" data-tone="${owed.length ? "today" : "good"}">${owed.length}</span>
             </div>
-            ${owed.length ? h`<ul class="owed">${owed.map(owedRow)}</ul>`
+            ${owed.length ? h`<ul class="owed" id="owed-list">${owed.map(owedRow)}</ul>`
                           : h`<p class="note good">${
                               word("onboard_owed_none",
                                    "Nothing further is outstanding.")
@@ -1222,6 +1222,7 @@
               <h2 class="section-head">${
                 word("onboard_not_modelled", "Not checked here")
               }</h2>
+              <p class="small prose">${word("onboard_not_modelled_lead", "")}</p>
               <ul class="bullets small prose">${record.not_modelled.map(function (line) {
                 return h`<li>${line}</li>`;
               })}</ul>
@@ -1238,6 +1239,48 @@
 
       drawFiled();
       wireDrop();
+      wireExplain();
+    }
+
+    /* The clause is the authority and it is not the explanation.
+
+       "1.3.30 (what counts as an officially valid document); 5.4.3(c);
+       Annexure II Part B(a); PML Rules 9(4)(a)" is exactly what an inspector
+       wants and exactly what an officer who has never seen it cannot act on.
+       So the citation stays, folded away, and underneath it is a button that
+       says the same thing in a sentence.
+
+       This is a reading of the rule, not a source of it. It is asked for on
+       request rather than generated for every row, so a screen listing seven
+       outstanding documents does not make seven model calls nobody asked
+       for. */
+    function wireExplain() {
+      var where = document.getElementById("owed-list");
+      if (!where) { return; }
+      where.querySelectorAll("[data-explain]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var said = button.parentNode.querySelector(".owed-said");
+          if (button.disabled) { return; }
+          button.disabled = true;
+          said.hidden = false;
+          mount(said, h`<p class="small faint">${
+            word("ask_thinking", "Reading your records…")
+          }</p>`);
+          post("/api/chat", {
+            asked: word("onboard_explain_asks", "").replace(
+              "{what}", button.getAttribute("data-explain")),
+            looking_at: { id: partyId }
+          }).then(function (reply) {
+            mount(said, h`<p class="prose">${
+              reply.said || reply.withheld || ""
+            }</p>`);
+          }).catch(function (error) {
+            mount(said, h`<p class="problem">${
+              said(error) || word("ask_failed", "")
+            }</p>`);
+          }).then(function () { button.disabled = false; });
+        });
+      });
     }
 
     function owedRow(item) {
@@ -1268,6 +1311,11 @@
                  ${unevidenced && need.because
                    ? h`<p class="owed-why">${need.because}</p>` : ""}
                  <p class="owed-basis">${need.basis}</p>
+                 <button type="button" class="btn btn-quiet owed-explain"
+                         data-explain="${need.asks_for || ""}">${
+                   word("onboard_explain", "Put this in plain words")
+                 }</button>
+                 <div class="owed-said" hidden></div>
                </details>` : ""}
         </div>
         ${unevidenced
@@ -1564,10 +1612,48 @@
 
   /* ---------- the live run ---------- */
 
+  /* What the outside world is being asked, while it is being asked.
+
+     The eight checks are pure functions over the log and land in
+     milliseconds. Everything an officer actually waits for happens before
+     any of them: a watchlist query and a news search, against services this
+     machine does not control. That was invisible, so the screen showed
+     "0 of 8" for half a minute and then all eight at once -- which is a
+     progress bar over a sleep, and the one thing this product refuses to
+     put in front of somebody.
+
+     A source that fails says so here and says so again in the check that
+     reads it. Twice is right: this is why the wait ended, and that is what
+     it means for the file. */
+  function gatheringRows(gathering) {
+    if (!gathering) { return ""; }
+    var sources = [
+      ["watchlist", word("gather_watchlist", "The watchlist")],
+      ["press", word("gather_press", "The press")]
+    ];
+    return h`<ul class="gathering">${sources.map(function (pair) {
+      var how = gathering[pair[0]] || "looking";
+      return h`<li data-how="${how}">
+        <span class="dot" data-tone="${
+          how === "done" ? "good" : (how === "failed" ? "stop" : "running")
+        }"></span>
+        <span class="gather-what">${pair[1]}</span>
+        <span class="gather-how">${
+          how === "done" ? word("gather_done", "answered")
+            : (how === "failed" ? word("gather_failed", "did not answer")
+                                : word("gather_looking", "asking…"))
+        }</span>
+      </li>`;
+    })}</ul>`;
+  }
+
   function runScreen(taskId, partyId) {
     var where = frame("onboard");
     busy(where);
     var first = true;
+    /* Set once the screen has handed over to the report, so a late poll
+       cannot send somebody back to a run they have already left. */
+    var left = false;
 
     function draw(task) {
       var steps = task.plan || [];
@@ -1589,6 +1675,8 @@
               <p class="tiny faint">${task.done_count} / ${task.step_count}</p>
             </div>
           </div>
+
+          ${gatheringRows(task.gathering)}
 
           <ul class="run-steps">
             ${steps.map(function (step) {
@@ -1642,9 +1730,23 @@
         var task = payload.task || {};
         draw(task);
         if (task.running) {
-          poller = setTimeout(tick, 1200);
+          /* Fast enough that eight checks landing in a second are eight
+             things an officer sees happen, rather than one jump. */
+          poller = setTimeout(tick, 600);
         } else {
           stopPolling();
+          /* Straight to the report, after a beat long enough to watch the
+             last check land. An officer who has waited for a run does not
+             want to be asked whether they would like to see the result. */
+          if (partyId && !left) {
+            left = true;
+            setTimeout(function () {
+              if (here().name === "run") {
+                go("#/report/" + encodeURIComponent(partyId) +
+                   "/" + encodeURIComponent(taskId));
+              }
+            }, 1400);
+          }
         }
       }).catch(function (error) {
         stopPolling();

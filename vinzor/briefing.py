@@ -720,6 +720,34 @@ UI = {
     ),
     "onboard_known_more": "Anything else you know",
     "onboard_known_country": "Two letters, e.g. IN",
+    # The clause is the authority and it is not the explanation. An officer
+    # who has never read Annexure II Part B(a) cannot act on being shown its
+    # number, and an inspector cannot act on a paraphrase -- so both are on
+    # the screen, the citation first and the plain sentence behind it.
+    "onboard_explain": "Put this in plain words",
+    "onboard_explain_asks": (
+        "In two or three sentences, and without citing clause numbers: what "
+        "is {what}, why is this party being asked for it, and what is the "
+        "risk of taking them on without it? Write for a compliance officer "
+        "who has not read the rulebook."
+    ),
+    # Said above the list of what this system does not check. It was a bare
+    # list of seven caveats, which reads as a disclaimer rather than as the
+    # useful thing it is.
+    "onboard_not_modelled_lead": (
+        "These are things the rules ask for that this system does not look "
+        "at, listed rather than left to be discovered. Each needs a person, "
+        "or a record the product does not hold. Nothing below has been "
+        "checked either way."
+    ),
+    # The wait, made visible. Everything an officer waits for during a run
+    # happens at these two boundaries; the eight checks themselves are pure
+    # functions over the log and land in milliseconds.
+    "gather_watchlist": "The watchlist",
+    "gather_press": "The press",
+    "gather_looking": "asking…",
+    "gather_done": "answered",
+    "gather_failed": "did not answer",
     "read_field_name": "Name",
     "read_field_dob": "Date of birth",
     "read_field_nationality": "Nationality",

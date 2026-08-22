@@ -963,3 +963,94 @@ def test_a_country_is_not_quietly_cut_down_until_it_passes(workspace):
     assert status == 200
     assert engine.state.graph.entities[body["party_id"]].attributes[
         "nationality"] == "IN"
+
+
+def test_the_gather_is_bounded_once_for_the_pair_not_once_each(workspace):
+    """Two observations run at once and the waiting was serial.
+
+    ``join(GATHER_SECONDS)`` in a loop gives the second thread its own full
+    countdown after the first has already spent one, so a cap described in
+    the module as thirty seconds was in fact a minute -- and the officer
+    watching "0 of 8" was watching it for twice as long as anybody intended.
+    """
+    import inspect
+
+    from vinzor import server
+
+    source = inspect.getsource(server)
+    start = source.index("def _gather_then_check(")
+    body = source[start:source.index("\n        def ", start + 1)]
+    assert "deadline" in body, (
+        "the pair needs one deadline between them, not one each")
+    assert "one.join(GATHER_SECONDS)" not in body, (
+        "joining each thread with the full timeout doubles the cap")
+
+
+def test_a_run_reports_what_the_outside_world_is_doing(workspace):
+    """The eight checks are pure functions over the log and land in
+    milliseconds. Everything an officer waits for happens at the two
+    boundaries before them, and it was invisible -- so the screen sat at
+    "0 of 8" for half a minute and then showed all eight at once, which is a
+    progress bar over a sleep.
+    """
+    import time
+
+    engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    from vinzor.server import GATHERING
+
+    _status, started, _ = call(
+        base, "/api/onboarding",
+        {"name": "Somebody New", "kind": "PERSON"}, cookie=cookie)
+    task_id = started["task_id"]
+
+    # Let the real run finish, so nothing is writing to the store underneath
+    # this. Both observations fail immediately here -- there is no watchlist
+    # and no news service in a test -- which is itself the point: they fail
+    # and the run continues.
+    for _ in range(100):
+        _status, body, _ = call(base, f"/api/tasks/{task_id}", cookie=cookie)
+        if not body["task"].get("running"):
+            break
+        time.sleep(0.1)
+
+    # Nothing is being waited on, so nothing is reported.
+    assert "gathering" not in body["task"]
+
+    # And while something is, it reaches the screen.
+    GATHERING[task_id] = {"watchlist": "looking", "press": "failed"}
+    try:
+        _status, body, _ = call(base, f"/api/tasks/{task_id}", cookie=cookie)
+        assert body["task"]["gathering"] == {"watchlist": "looking",
+                                             "press": "failed"}
+    finally:
+        GATHERING.pop(task_id, None)
+
+
+def test_a_source_that_fails_does_not_stop_the_run(workspace):
+    """A watchlist that is down and a news service that is rate-limiting are
+    ordinary states of the world. Neither may stop an onboarding, and
+    neither may be recorded as a clean result -- the checks report the
+    absence, which is the finding an officer acts on."""
+    import time
+
+    engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    _status, started, _ = call(
+        base, "/api/onboarding",
+        {"name": "Nobody Reachable", "kind": "PERSON"}, cookie=cookie)
+
+    for _ in range(100):
+        _status, body, _ = call(base, f"/api/tasks/{started['task_id']}",
+                                cookie=cookie)
+        if not body["task"].get("running"):
+            break
+        time.sleep(0.1)
+    task = body["task"]
+    assert not task.get("running"), "a failed observation held the run open"
+    assert task["done_count"] == task["step_count"], (
+        "every check should have run even though both sources failed")

@@ -117,6 +117,13 @@ MAX_BODY_BYTES = 64 * 1024
 #: better than a screen that sits still.
 GATHER_SECONDS = 30
 
+#: What the boundary is doing while a run waits on it, keyed by task.
+#: Held here rather than on the log because it is not a fact about a party --
+#: it is what a socket is doing this second, and it is gone the moment the
+#: answer arrives. Facts go on the record; this is a progress light.
+GATHERING: dict = {}
+
+
 #: A spreadsheet is allowed to be a spreadsheet. Twenty megabytes covers
 #: years of statement lines; anything past it is not a sheet a person read.
 MAX_SHEET_BYTES = 20 * 1024 * 1024
@@ -593,23 +600,41 @@ def build_app(engine: Vinzor, keys=None):
             # one thing agents.py refuses to do. They are independent
             # questions to independent services; there is no reason to make
             # the press wait for the watchlist.
+            import time
+
+            # Watched, because it is the part that takes the time. The eight
+            # checks are pure functions over the log and land in
+            # milliseconds; everything an officer waits for happens here. It
+            # was invisible, so the screen showed "0 of 8" for half a minute
+            # and then all eight at once -- a progress bar over a sleep,
+            # which is the one thing agents.py refuses to do.
+            GATHERING[task_id] = {"watchlist": "looking", "press": "looking"}
             gathering = [
                 threading.Thread(target=self._screen_quietly,
-                                 args=(party, today), daemon=True),
+                                 args=(party, today, task_id), daemon=True),
                 threading.Thread(target=self._press_quietly,
-                                 args=(party, today), daemon=True),
+                                 args=(party, today, task_id), daemon=True),
             ]
             for one in gathering:
                 one.start()
+            # One deadline for the pair, not one each. Joined in a loop with
+            # the same timeout, two threads cost up to twice it: the second
+            # join starts its own full countdown after the first has already
+            # spent one. The comment above says these run at once and they
+            # do -- it was the *waiting* that was serial, so a cap described
+            # as thirty seconds was a minute.
+            deadline = time.monotonic() + GATHER_SECONDS
             for one in gathering:
-                one.join(GATHER_SECONDS)
+                one.join(max(0.0, deadline - time.monotonic()))
+            GATHERING.pop(task_id, None)
             try:
                 engine.run_task(task_id, when=today, party=party)
             except Exception as broke:      # noqa: BLE001
                 print("  an onboarding run stopped: %s: %s"
                       % (type(broke).__name__, broke), file=sys.stderr)
 
-        def _screen_quietly(self, party: str, today: str) -> None:
+        def _screen_quietly(self, party: str, today: str,
+                            task_id: str = "") -> None:
             """The watchlist. Silent to the officer, loud in the log.
 
             They will see it on screen as "nobody has run a watchlist check",
@@ -628,14 +653,27 @@ def build_app(engine: Vinzor, keys=None):
                            api_key=os.environ.get("VINZOR_SCREENING_KEY", ""),
                            scope=os.environ.get("VINZOR_SCREENING_SCOPE",
                                                 "default")))
+                self._gathered(task_id, "watchlist", "done")
             except ScreeningUnavailable as why:
+                self._gathered(task_id, "watchlist", "failed")
                 print("  onboarding could not screen: %s" % why,
                       file=sys.stderr)
             except Exception as broke:      # noqa: BLE001
+                self._gathered(task_id, "watchlist", "failed")
                 print("  onboarding could not screen: %s: %s"
                       % (type(broke).__name__, broke), file=sys.stderr)
 
-        def _press_quietly(self, party: str, today: str) -> None:
+        @staticmethod
+        def _gathered(task_id: str, what: str, how: str) -> None:
+            """Note what became of one observation, if anybody is watching."""
+            if not task_id:
+                return
+            state = GATHERING.get(task_id)
+            if state is not None:
+                state[what] = how
+
+        def _press_quietly(self, party: str, today: str,
+                           task_id: str = "") -> None:
             """The news. Least decisive of the eight, so it never holds the
             others up: a sanctions match stops the money and this does not."""
             from .adversemedia import AdverseMediaUnavailable
@@ -643,10 +681,13 @@ def build_app(engine: Vinzor, keys=None):
 
             try:
                 read_the_press(engine, party, checked_at=today)
+                self._gathered(task_id, "press", "done")
             except AdverseMediaUnavailable as why:
+                self._gathered(task_id, "press", "failed")
                 print("  onboarding could not read the press: %s" % why,
                       file=sys.stderr)
             except Exception as broke:      # noqa: BLE001
+                self._gathered(task_id, "press", "failed")
                 print("  onboarding could not read the press: %s: %s"
                       % (type(broke).__name__, broke), file=sys.stderr)
 
@@ -1493,7 +1534,13 @@ def build_app(engine: Vinzor, keys=None):
             if task is None:
                 self._problem("not_found", HTTPStatus.NOT_FOUND)
                 return
-            self._json({"ui": UI, "task": _task_json(task, today)})
+            shaped = _task_json(task, today)
+            # What the boundary is doing right now, where a run is waiting on
+            # it. Absent once the observations have settled.
+            waiting = GATHERING.get(unquote(task_id))
+            if waiting:
+                shaped["gathering"] = dict(waiting)
+            self._json({"ui": UI, "task": shaped})
 
         def _record(self, entity_id: str) -> None:
             """Everything on one party as one document. Reads only.
