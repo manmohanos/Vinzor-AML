@@ -95,3 +95,27 @@ def conversation(*, now: Callable[[], _datetime.datetime],
     if chosen == "bedrock":
         return bedrock_conversation(now=now, env=env)
     raise AskingUnavailable("the assistant is not configured")
+
+
+def eyes(*, now: Callable[[], _datetime.datetime],
+         env: Optional[Mapping[str, str]] = None) -> Any:
+    """The configured reader for photographed documents, or None.
+
+    None rather than an exception, because there being no such reader is an
+    ordinary state and not a fault: the product worked without one for its
+    whole life and still does, saying plainly that a photograph has to be
+    read by a person. The caller passes this straight to ``extraction.read``,
+    which reaches for it only where a file has no text to parse.
+
+    Bedrock only, for now. Azure's vision deployments are a separate resource
+    from the chat one and this account has none, and a provider named here
+    that does not answer would be worse than one that is absent.
+    """
+    from . import photo
+
+    if which(env) != "bedrock":
+        return None
+    try:
+        return photo.bedrock_eyes(now=now, env=env)
+    except Exception:               # noqa: BLE001 - unconfigured is not a fault
+        return None

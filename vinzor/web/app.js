@@ -1181,11 +1181,48 @@
       </li>`;
     }
 
+    /* What the document turned out to say, under the document that said it.
+
+       This was being thrown away. The server has read every upload since the
+       reader was written and the reply went into an empty `then`, so an
+       officer filed a passport and then typed its date of birth in by hand
+       from the same passport. Nothing was wrong with the reading; it simply
+       never reached the screen.
+
+       Every value carries the line it was read from, and which reader found
+       it -- parsed off the page, or looked at by a model because the file was
+       a photograph. An officer confirming a date of birth is entitled to know
+       which, and the two are not equally strong. */
+    function readingRows(file) {
+      if (file.unreadable) {
+        return h`<p class="filed-unread small">${file.unreadable}</p>`;
+      }
+      if (!(file.proposals || []).length) { return ""; }
+      return h`<ul class="filed-read">${file.proposals.map(function (one) {
+        return h`<li>
+          <span class="filed-field">${word("read_field_" + one.field, one.field)}</span>
+          <span class="filed-value">${one.value}</span>
+          ${one.on_record && !one.agrees
+            ? h`<span class="badge" data-tone="today">${
+                word("read_differs", "differs")
+              } ${one.on_record}</span>`
+            : ""}
+          ${one.agrees
+            ? h`<span class="badge" data-tone="good">${
+                word("read_agrees", "agrees")
+              }</span>` : ""}
+          <span class="filed-seen tiny faint">${one.seen_as}</span>
+          <span class="filed-by tiny faint">${one.read_by || ""}</span>
+        </li>`;
+      })}</ul>`;
+    }
+
     function drawFiled() {
       mount(document.getElementById("filed"), added.map(function (file) {
         return h`<li>
                    <span class="filed-name">${file.name}</span>
                    <span class="filed-state" data-tone="${file.tone}">${file.state}</span>
+                   ${readingRows(file)}
                  </li>`;
       }));
     }
@@ -1220,15 +1257,14 @@
         var row = { name: file.name, state: word("onboard_sending", "…"), tone: "plain" };
         added.push(row);
         drawFiled();
-        /* TODO — this route is not yet built. It is the one thing the
-           onboarding contract does not yet name: where a document goes.
-           Until it exists the reply is a refusal in a sentence, which is
-           shown against the file, and nothing on the outstanding list moves. */
         postBytes("/api/onboarding/" + encodeURIComponent(partyId) +
                   "/documents?filename=" + encodeURIComponent(file.name), file)
-          .then(function () {
+          .then(function (reply) {
             row.state = word("onboard_added", "Added");
             row.tone = "good";
+            var got = (reply && reply.read) || {};
+            row.proposals = got.proposals || [];
+            row.unreadable = got.unreadable || "";
             drawFiled();
             return reread();
           })

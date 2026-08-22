@@ -615,9 +615,20 @@ def build_app(engine: Vinzor, keys=None):
             # 5.4.5 asks for and "our software read a PDF" is not.
             from .extraction import read as read_document
 
+            from . import providers
+
             entity = engine.state.graph.entities.get(party)
+            # A customer photographs their passport; they do not generate a
+            # PDF with a text layer in it. Where a file has no text to parse,
+            # the reader for photographs is asked instead -- and its answers
+            # arrive marked as a model's, which is why ``read_by`` travels
+            # with every proposal below.
+            try:
+                looking = providers.eyes(now=_utcnow)
+            except Exception:               # noqa: BLE001
+                looking = None
             reading = read_document(
-                data, kind=kind,
+                data, kind=kind, eyes=looking,
                 holds=dict(getattr(entity, "attributes", {}) or {},
                            name=getattr(entity, "name", "")))
             self._json({
@@ -627,7 +638,7 @@ def build_app(engine: Vinzor, keys=None):
                     "proposals": [
                         {"field": p.field, "value": p.value,
                          "seen_as": p.seen_as, "agrees": p.agrees,
-                         "on_record": p.on_record}
+                         "on_record": p.on_record, "read_by": p.read_by}
                         for p in reading.proposals],
                 },
             })

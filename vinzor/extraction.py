@@ -30,10 +30,14 @@ words a document uses for a field. Same document in, same fields out, today
 and in a year. A model asked to "pull the details out of this" would be an
 unrepeatable answer on a compliance file.
 
-**What it will not do.** It does not read handwriting, photographs of screens,
-or anything that is an image rather than text — a scan with no text layer
-gives nothing back and says so, rather than guessing. It does not correct what
-it finds. And it will not propose a field the document's *kind* cannot
+**What it will not do.** It does not read handwriting or photographs of
+screens. A file with no text layer is not parsed at all — and where a reader
+for photographs is configured, it is handed to ``photo.py`` instead, whose
+answer is a model's and is marked as one everywhere it appears. Where there is
+no such reader, a scan gives nothing back and says so, rather than guessing.
+The order is deliberate: **where a document can be parsed it is parsed**,
+because that answer is reproducible and a model's is not. It does not correct
+what it finds. And it will not propose a field the document's *kind* cannot
 evidence: a utility bill may offer an address and may not offer a nationality,
 however confidently the page says one, because ``documents.KINDS`` decides
 what a kind of paper is allowed to prove and this is not the place to argue
@@ -110,6 +114,15 @@ _GIVEN_NAME = ("given name", "given names", "first name", "forename")
 class Proposal:
     """One field a document appears to show, offered for confirmation."""
 
+    #: Read by the table of labels below: same document in, same field out,
+    #: today and in a year.
+    BY_PARSER = "the document's own text"
+    #: Read by a model looking at a photograph, because the file had no text
+    #: in it to parse. Weaker provenance, and it says so wherever it is
+    #: shown -- an officer confirming a date of birth is entitled to know
+    #: whether it was parsed or looked at.
+    BY_MODEL = "a reader looking at the photograph"
+
     field: str
     #: What the page said, cleaned only of surrounding punctuation. Never
     #: corrected: a value this could not read properly is a value a person
@@ -123,6 +136,10 @@ class Proposal:
     agrees: bool = False
     #: What the record holds instead, where the two differ.
     on_record: str = ""
+    #: Which reader produced this, in the words shown to an officer. Defaults
+    #: to the parser, so every existing proposal keeps the stronger claim and
+    #: only the photograph reader has to say otherwise.
+    read_by: str = BY_PARSER
 
 
 @dataclass(frozen=True)
@@ -161,6 +178,13 @@ def _as_iso(value: str) -> str:
     if int(month) > 12:
         day, month = month, day
     if int(month) > 12 or int(day) > 31:
+        return ""
+    # A blank form prints 00/00/0000, and every component of that passes the
+    # range checks above. Sumsub's own published Aadhaar sample carries
+    # exactly that, and without this it became a date of birth of
+    # "0000-00-00" on a compliance record -- a value that looks read rather
+    # than missing, which is the worse of the two.
+    if int(day) < 1 or int(month) < 1 or int(year) < 1:
         return ""
     return "%s-%02d-%02d" % (year, int(month), int(day))
 
@@ -241,8 +265,32 @@ def fields_in(text: str, kind: str) -> tuple[tuple[str, str, str], ...]:
     return tuple((field, value, line) for field, (value, line) in found.items())
 
 
+def _looked_at(path_or_bytes, *, kind: str, holds, eyes):
+    """The photograph reader, or None if there is nobody to ask.
+
+    None rather than an empty Reading, so the caller keeps its own sentence
+    about a file with no text in it. A document nobody looked at and a
+    document that was looked at and showed nothing are different findings,
+    and only one of them is the officer's problem.
+    """
+    if eyes is None:
+        return None
+    from .photo import read as look
+
+    try:
+        if isinstance(path_or_bytes, (bytes, bytearray)):
+            data = bytes(path_or_bytes)
+        else:
+            with open(path_or_bytes, "rb") as handle:
+                data = handle.read()
+    except OSError:
+        return None
+    return look(data, kind=kind, eyes=eyes, holds=holds)
+
+
 def read(path_or_bytes, *, kind: str,
-         holds: Optional[Mapping[str, str]] = None) -> Reading:
+         holds: Optional[Mapping[str, str]] = None,
+         eyes: Optional[Any] = None) -> Reading:
     """What this document appears to show, beside what the record holds.
 
     ``holds`` is the party's current attributes. Where the two agree the
@@ -271,6 +319,12 @@ def read(path_or_bytes, *, kind: str,
         else:
             read_pages = pages(path_or_bytes)
     except Exception:      # noqa: BLE001 - any reader failure is unreadable
+        # A file the PDF reader cannot open is very often a photograph, and a
+        # photograph is what a customer actually sends. Ask the other reader
+        # before giving up on it.
+        looked = _looked_at(path_or_bytes, kind=kind, holds=holds, eyes=eyes)
+        if looked is not None:
+            return looked
         return Reading(kind=kind, unreadable=(
             "This file could not be read as a document. Nothing was taken "
             "from it, and it is on the record as filed."))
@@ -283,6 +337,9 @@ def read(path_or_bytes, *, kind: str,
 
     text = "\n".join(p.text for p in read_pages)
     if len(text.strip()) < 20:
+        looked = _looked_at(path_or_bytes, kind=kind, holds=holds, eyes=eyes)
+        if looked is not None:
+            return looked
         return Reading(kind=kind, unreadable=(
             "There is no text in this file to read -- it is most likely a "
             "photograph or a scan. It is on the record as filed, and what it "

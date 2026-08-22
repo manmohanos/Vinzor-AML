@@ -643,6 +643,19 @@ UI = {
         "The assistant could not be reached. Every finding above was read "
         "from the record and is unaffected."
     ),
+    # What a document turned out to say. The field names are the record's
+    # own and are not words an officer uses, so each is given one here.
+    "read_field_name": "Name",
+    "read_field_dob": "Date of birth",
+    "read_field_nationality": "Nationality",
+    "read_field_id_document_number": "Document number",
+    "read_field_address": "Address",
+    "read_field_pan": "Permanent account number",
+    "read_field_cin": "Corporate identity number",
+    "read_field_date_of_incorporation": "Date of incorporation",
+    "read_field_country_of_incorporation": "Country of incorporation",
+    "read_agrees": "agrees with the record",
+    "read_differs": "the record says",
     "ask_examples_heading": "Try",
     "ask_examples": [
         "What needs my attention most urgently today?",
