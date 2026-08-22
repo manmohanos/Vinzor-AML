@@ -488,21 +488,27 @@ ul.bullets li { margin-bottom: 4px; }
   /* The primary action is wider than the ask box, not narrower. It was the
      other way round, which put a free-text chat box above and beside the one
      thing an officer came here to do -- and answered "what is red today"
-     third. The ask box has its own nav entry and its own screen. */
-  grid-template-columns: minmax(340px, 1.25fr) minmax(300px, 1fr);
+     third. The ask box has its own nav entry and its own screen.
+
+     `start`, not `stretch`. Stretching made the shorter card as tall as the
+     taller one and then centred four lines inside it, so the single most
+     important control on the product opened inside a hundred and twenty
+     pixels of empty white. A card should be the size of what is in it. */
+  grid-template-columns: minmax(340px, 1.15fr) minmax(320px, 1fr);
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
 }
 @media (max-width: 1120px) { .begin { grid-template-columns: 1fr; } }
 
 .begin-primary {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 12px;
-  padding: 24px;
+  gap: 10px;
+  padding: 22px;
 }
+.begin-primary .eyebrow { margin-bottom: 2px; }
 .begin-primary .btn { align-self: flex-start; }
+.begin-primary .small { margin: 0; }
 
 .ask-card { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
 .ask-form { display: flex; gap: 8px; }
@@ -531,10 +537,9 @@ ul.bullets li { margin-bottom: 4px; }
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 12px 14px;
-  box-shadow: var(--whisper);
+  padding: 11px 14px 12px;
 }
-.tally .count { display: block; font-size: 24px; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
+.tally .count { display: block; font-size: 21px; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
 .tally .count[data-tone="stop"] { color: var(--stop); }
 .tally .count[data-tone="today"] { color: var(--today); }
 .tally .count[data-tone="good"] { color: var(--settled); }
@@ -828,4 +833,36 @@ ul.bullets li { margin-bottom: 4px; }
   color: var(--ink-faint);
   background: var(--sunk);
   font-size: 14px;
+}
+
+/* -- the regulator's own words ---------------------------------------------
+   A finding that says "clause 5.4.2" and stops is a citation the way a
+   footnote with no book is a citation: nobody reading it can tell whether
+   the rule says what we claim. Folded away by default, because the number is
+   what an officer scans and the sentence is what they open when challenged. */
+.clause-source { margin: 6px 0 0; }
+.clause-source > summary {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; list-style: none; padding: 2px 0;
+}
+.clause-source > summary::-webkit-details-marker { display: none; }
+.clause-source > summary::after {
+  content: "says who?"; font-size: 12px; color: var(--indigo);
+}
+.clause-source[open] > summary::after { content: "hide"; }
+.clause-source > summary:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+.clause-heading { font-size: 12px; color: var(--ink-soft); }
+.clause-says {
+  margin: 6px 0 0; padding: 10px 14px;
+  border-left: 3px solid var(--indigo);
+  background: var(--indigo-wash);
+  font-size: 14px; line-height: 1.55; color: var(--ink);
+  max-width: 68ch;
+}
+.clause-note, .clause-where {
+  margin: 6px 0 0; font-size: 12px; color: var(--ink-soft); max-width: 68ch;
+}
+.clause-unverified {
+  margin: 6px 0 0; font-size: 12px; line-height: 1.5;
+  color: var(--today); max-width: 68ch;
 }

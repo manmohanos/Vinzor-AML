@@ -690,12 +690,38 @@ def build_app(engine: Vinzor, keys=None):
                      "held_but_unevidenced": o.held_but_unevidenced}
                     for o in still],
                 "not_modelled": list(NOT_MODELLED),
+                # Each finding carries the clause **and its words**. A file
+                # saying "clause 5.4.2" and nothing else is the shape of an
+                # answer nobody can check: the officer cannot tell whether
+                # the rule says what we claim, and neither can the inspector
+                # they are answering to. The register already holds the
+                # extract, the page, the edition and the link -- it was
+                # simply not being sent.
                 "findings": [
                     {"summary": c.evidence[0].summary if c.evidence else "",
                      "severity": c.severity.value,
                      "case_id": c.case_id,
                      "case_type": c.case_type,
-                     "status": c.status.value}
+                     "status": c.status.value,
+                     "clauses": [
+                         {"clause": cited.get("clause"),
+                          "heading": cited.get("heading"),
+                          "says": cited.get("extract"),
+                          "document": cited.get("document"),
+                          "edition": cited.get("version"),
+                          "page": cited.get("page"),
+                          "amended": cited.get("amended"),
+                          "url": cited.get("url"),
+                          # Shown, never hidden. Every clause in this
+                          # register was extracted by machine and no
+                          # qualified person has signed it off, and a
+                          # product that overstates the provenance of its
+                          # own rules is worse than one that has none.
+                          "verified": bool(cited.get("verified")),
+                          "checked_on": cited.get("source_checked")}
+                         for evidence in c.evidence
+                         for cited in (evidence.citations or ())
+                     ]}
                     for c in open_files],
                 # The three things only a person may do, named by briefing.py
                 # rather than by this handler -- the screen was reconstructing
