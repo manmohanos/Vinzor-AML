@@ -466,41 +466,101 @@
 
   /* ---------- home ---------- */
 
+  /* The morning, on one screen and without a scroll: who you are and what day
+     it is, the one thing this product is for, the assistant, five counts, the
+     top of the list beside the shape of the book, and the bands underneath.
+
+     Every figure below is a figure the server sent. There is no trend, no
+     comparison with yesterday and no percentage this file worked out, because
+     nothing here knows what yesterday held -- and a number nobody can defend,
+     on the screen an officer answers to a regulator from, is the worst defect
+     this product could ship. Where the server sends nothing, the block is
+     left out rather than filled. */
+
   function home() {
     var where = frame("home");
     busy(where);
     theMorning().then(function (brief) {
+      var dash = brief.dashboard || {};
+      var beside = (dash.ageing || []).length > 0;
+      /* The one screen that is supposed to end where the window does. Every
+         other screen is a document and wants a foot to scroll into. */
+      where.classList.add("sheet-home");
       mount(where, h`
-        <div class="head">
-          <h1 class="greeting">${brief.greeting}</h1>
-        </div>
-
-        <div class="begin">
-          <div class="card begin-primary">
-            <p class="eyebrow">${word("onboard_eyebrow", "Start here")}</p>
-            <a class="btn btn-primary btn-big" href="#/onboard">${
-              word("onboard_start", "Onboard an investor")
-            }</a>
-            <p class="small soft prose">${
-              word("onboard_lead",
-                   "One party at a time, in three steps. Nothing is decided for you.")
-            }</p>
+        <div class="home">
+          <div class="home-greeting">
+            <h1 class="greeting">${brief.greeting}</h1>
           </div>
-          <div class="card ask-card" id="ask-here"></div>
-        </div>
 
-        <ul class="tally" id="tally"></ul>
+          <div class="begin">
+            <div class="card begin-primary">
+              <p class="eyebrow">${word("onboard_eyebrow", "Start here")}</p>
+              <a class="btn btn-primary btn-big" href="#/onboard">${
+                word("onboard_start", "Onboard an investor")
+              }</a>
+              <p class="small soft prose">${
+                word("onboard_lead",
+                     "One party at a time, in three steps. Nothing is decided for you.")
+              }</p>
+            </div>
+            <div class="card ask-card" id="ask-here"></div>
+          </div>
 
-        <div class="card pad" id="priority"></div>`);
+          <ul class="tally" id="tally"></ul>
+
+          <div class="home-panels${beside ? "" : " alone"}">
+            <div class="card pad" id="priority"></div>
+            ${beside ? h`<div class="card pad" id="standing"></div>` : ""}
+          </div>
+
+          <div class="home-bands" id="bands"></div>
+        </div>`);
 
       mount(document.getElementById("tally"), tallyTiles(brief));
-      askBox(document.getElementById("ask-here"), false);
+      askCard(document.getElementById("ask-here"));
       mount(document.getElementById("priority"), prioritySlice(brief));
+      if (beside) {
+        mount(document.getElementById("standing"), standingPanel(dash));
+        applyShares(document.getElementById("standing"));
+      }
+      mount(document.getElementById("bands"), bandStrip(dash));
       on(where, "[data-open-file]", "click", function (event) {
         go("#/queue/" + encodeURIComponent(
           event.currentTarget.getAttribute("data-open-file")));
       });
     }).catch(function (error) { failed(where, error); });
+  }
+
+  /* ---------- the five counts ----------
+
+     One mark each, drawn here rather than fetched: the policy this page is
+     served under admits no remote image, and an emoji would be a different
+     typeface on every machine this is read on. Geometry only -- the stroke,
+     the joins and the colour are classes in app.css, for the same reason the
+     ownership drawing keeps its colours there.
+
+     The marks are furniture and say nothing the label does not: a count with
+     no mark is a count with a gap beside it, never a count with a meaning
+     missing. They are held in the order briefing.py emits its counts in, and
+     the last one stands in for anything that order grows. */
+  var TALLY_MARKS = [
+    /* what is open */
+    '<path d="M3.5 5.5h5l2 2.5h10v10.5h-17Z"/>',
+    /* what must stop */
+    '<path d="M9 3.5h6l4.5 4.5v6L15 18.5H9L4.5 14V8Z"/><path d="M8.5 11h7"/>',
+    /* what is due today */
+    '<circle cx="12" cy="12" r="8"/><path d="M12 7.2V12l3.2 2"/>',
+    /* what has never been looked at */
+    '<path d="M3.5 12c2.8-4.4 14.2-4.4 17 0-2.8 4.4-14.2 4.4-17 0Z"/>' +
+      '<circle cx="12" cy="12" r="2.3"/><path d="M5 19.5 19 4.5"/>',
+    /* what is finished with */
+    '<circle cx="12" cy="12" r="8"/><path d="M8.4 12.2 11 14.8 15.6 9.4"/>'
+  ];
+
+  function tallyMark(index) {
+    var body = TALLY_MARKS[index] || TALLY_MARKS[TALLY_MARKS.length - 1];
+    return raw('<svg class="tally-mark" viewBox="0 0 24 24" aria-hidden="true" ' +
+               'focusable="false">' + body + "</svg>");
   }
 
   /* The small honest numbers. Every label and figure is the server's. */
@@ -511,16 +571,22 @@
         return h`<li><span class="label">${line}</span></li>`;
       });
     }
-    return stats.map(function (stat) {
+    return stats.map(function (stat, index) {
+      var tone = stat.tone || "plain";
       return h`<li>
-                 <span class="count" data-tone="${stat.tone || "plain"}">${stat.value}</span>
-                 <span class="label">${stat.label}</span>
+                 <span class="tally-head">
+                   <span class="tally-icon" data-tone="${tone}">${
+                     tallyMark(index)
+                   }</span>
+                   <span class="label">${stat.label}</span>
+                 </span>
+                 <span class="count" data-tone="${tone}">${stat.value}</span>
                </li>`;
     });
   }
 
-  /* The bottom strip: what is nearest the front of the queue, and a way in.
-     Three lines, not a dashboard — the list itself is one click away. */
+  /* The top of the queue, and a way in. A few lines, not a second list — the
+     list itself is one click away. */
   function prioritySlice(brief) {
     var groups = brief.groups || [];
     if (!groups.length) {
@@ -574,14 +640,94 @@
       </ul>`;
   }
 
-  /* ---------- the ask box ---------- */
+  /* ---------- where the book stands ----------
 
-  function askBox(where, roomy) {
+     How long the open files have been waiting, which is the first question an
+     inspector asks and the one a count of open files cannot answer. The
+     heading, the band names and the closing sentence are the server's; the
+     bar is the share briefing.py computed for exactly this, and carries no
+     figure of its own because the count beside it already says it.
+
+     Nothing is compared with yesterday, and nothing is a proportion this file
+     worked out. There is no record of yesterday to compare against. */
+  function standingPanel(dash) {
+    var bands = dash.ageing || [];
+    return h`
+      <div class="section-head">
+        <h2>${dash.ageing_heading || word("home_standing", "Where the book stands")}</h2>
+      </div>
+      <table class="grid standing"><tbody>${bands.map(function (band) {
+        return h`<tr>
+          <td class="standing-what">
+            <span class="dot" data-tone="${band.tone || "plain"}"></span>${band.label}
+          </td>
+          <td class="standing-bar">
+            <span class="bar"><i data-share="${Math.round((band.share || 0) * 100)}"
+                                 data-tone="${band.tone || ""}"></i></span>
+          </td>
+          <td class="num standing-count">${band.count}</td>
+        </tr>`;
+      })}</tbody></table>
+      ${dash.ageing_note ? h`<p class="tiny faint prose standing-note">${
+        dash.ageing_note
+      }</p>` : ""}`;
+  }
+
+  /* The quiet strip under everything: what the open files are actually about.
+     Counts the server sent, each a way into the list. Muted on purpose — it
+     is context for the five counts above it, not a sixth thing to read
+     first. */
+  function bandStrip(dash) {
+    var rows = (dash.workload || []).slice(0, 4);
+    if (!rows.length) { return ""; }
+    return h`
+      <p class="eyebrow">${dash.workload_heading || ""}</p>
+      <ul class="bands">
+        ${rows.map(function (row) {
+          return h`<li><a href="#/queue">
+                     <span class="count">${row.count}</span>
+                     <span class="label">${row.label}</span>
+                   </a></li>`;
+        })}
+      </ul>`;
+  }
+
+  /* ---------- asking ----------
+
+     One conversation, not a box that answers once and forgets.
+
+     The thread is not kept here. It is read back from the server, which
+     assembles it out of the record rather than out of a store beside it — so
+     an officer who signs in on another machine sees the same exchanges, and
+     an inspector asking what was asked of the machine and what it did about
+     it has one place to look rather than two to reconcile. Reloading this
+     page is therefore not a way of losing anything.
+
+     What this file keeps is the sitting: the turns already drawn, and the one
+     question that is still in flight. Both are gone on reload, and neither is
+     ever allowed to stand in for the record. */
+
+  /* Turns as the screen has them, oldest first. Reloaded from the server
+     every time the screen opens. */
+  var thread = [];
+
+  /* The question the officer typed on the home card, carried to this screen
+     so the exchange lands in one place instead of two. */
+  var carried = "";
+
+  /* Openers the server offers on an empty thread, where it sends any. */
+  var openers = [];
+
+  /* ---------- the card on the home screen ----------
+     It no longer answers where it stands. A question asked here opens the
+     conversation and is asked there, so the officer has one thread rather
+     than an answer on the home screen that nothing remembers. */
+  function askCard(where) {
+    if (!where) { return; }
     mount(where, h`
       <div class="spread">
         <h2>${word("ask_heading", "")}</h2>
       </div>
-      ${roomy ? h`<p class="small soft prose">${word("ask_lead", "")}</p>` : ""}
       <form class="ask-form">
         <input type="text" id="asked" autocomplete="off"
                placeholder="${word("ask_placeholder", "")}"
@@ -589,15 +735,13 @@
         <button type="submit" class="btn btn-primary">${word("ask_go", "")}</button>
       </form>
       <div class="ask-tries">
-        ${(ui.ask_examples || []).slice(0, roomy ? 4 : 2).map(function (example) {
+        ${(ui.ask_examples || []).slice(0, 2).map(function (example) {
           return h`<button type="button" data-try="${example}">${example}</button>`;
         })}
-      </div>
-      <div class="ask-answer" hidden></div>`);
+      </div>`);
 
     var form = where.querySelector(".ask-form");
     var box = where.querySelector("#asked");
-    var answer = where.querySelector(".ask-answer");
 
     on(where, "[data-try]", "click", function (event) {
       box.value = event.currentTarget.getAttribute("data-try");
@@ -608,35 +752,238 @@
       event.preventDefault();
       var asked = box.value.trim();
       if (!asked) { return; }
-      answer.hidden = false;
-      mount(answer, h`<p class="faint small">${word("ask_thinking", "")}</p>`);
-      post("/api/chat", { asked: asked }).then(function (reply) {
-        if (reply.kind === "work" && reply.task_id) {
-          mount(answer, h`
-            <p class="prose">${reply.said}</p>
-            <p><a class="btn" href="#/run/${encodeURIComponent(reply.task_id)}">${
-              word("run_watch", "Watch it run")
-            }</a></p>`);
-          return;
-        }
-        mount(answer, h`
-          <p class="prose">${reply.said}</p>
-          ${reply.withheld ? h`<p class="note prose">${reply.withheld}</p>` : ""}
-          ${(reply.looked_at && reply.looked_at.length) ? h`
-            <p class="tiny faint">${word("ask_looked_at", "")}</p>
-            <ul class="bullets tiny">${reply.looked_at.map(function (step) {
-              return h`<li>${step}</li>`;
-            })}</ul>` : ""}`);
-      }).catch(function (error) {
-        mount(answer, h`<p class="note bad">${said(error)}</p>`);
-      });
+      box.value = "";
+      carried = asked;
+      go("#/ask");
     });
   }
 
+  /* ---------- the conversation ---------- */
+
   function askScreen() {
     var where = frame("ask");
-    mount(where, h`<div class="card ask-card" id="ask-here"></div>`);
-    askBox(document.getElementById("ask-here"), true);
+    mount(where, h`
+      <div class="chat">
+        <div class="chat-head">
+          <h1>${word("ask_heading", "")}</h1>
+          <p class="small soft prose">${word("ask_lead", "")}</p>
+        </div>
+        <div class="chat-thread" id="thread" aria-live="polite"></div>
+        <div class="chat-foot">
+          <form class="chat-form" id="chat-form">
+            <textarea id="asked" rows="1" autocomplete="off"
+                      placeholder="${word("ask_placeholder", "")}"
+                      aria-label="${word("ask_heading", "")}"></textarea>
+            <button type="submit" class="btn btn-primary">${word("ask_go", "")}</button>
+          </form>
+        </div>
+      </div>`);
+
+    var box = where.querySelector("#asked");
+    var form = where.querySelector("#chat-form");
+    var pending = null;
+
+    /* Nothing here is drawn from memory. The thread is what the server has,
+       and where the server has none — the route may not be there yet — the
+       screen opens empty and says so with the openers rather than with an
+       error about a route, which is not a thing an officer can act on. */
+    thread = [];
+    openers = [];
+    drawThread();
+    readThread().then(function (payload) {
+      thread = shapeTurns(payload && payload.turns);
+      openers = (payload && payload.openers) || [];
+      drawThread();
+      if (carried) {
+        var first = carried;
+        carried = "";
+        send(first);
+      }
+    });
+
+    function drawThread() {
+      var box2 = document.getElementById("thread");
+      if (!box2) { return; }
+      if (!thread.length && !pending) {
+        mount(box2, tries());
+        on(box2, "[data-try]", "click", function (event) {
+          box.value = event.currentTarget.getAttribute("data-try");
+          grow();
+          box.focus();
+        });
+        return;
+      }
+      mount(box2, h`${thread.map(turnBlock)}${pending ? waitingBlock(pending) : ""}`);
+      box2.scrollTop = box2.scrollHeight;
+    }
+
+    /* What there is to ask, on a thread with nothing in it yet. The server's
+       own suggestions where it sends them, and the examples it has always
+       sent where it does not. */
+    function tries() {
+      var sets = openers.length
+        ? openers
+        : [{ heading: word("ask_examples_heading", ""),
+             asks: ui.ask_examples || [] }];
+      return h`<div class="chat-empty">
+        ${sets.map(function (set) {
+          if (!(set.asks || []).length) { return ""; }
+          return h`<div class="chat-opener">
+            ${set.heading ? h`<p class="eyebrow">${set.heading}</p>` : ""}
+            <div class="ask-tries">
+              ${(set.asks || []).map(function (one) {
+                return h`<button type="button" data-try="${one}">${one}</button>`;
+              })}
+            </div>
+          </div>`;
+        })}
+      </div>`;
+    }
+
+    /* The question goes up on the screen before anything is sent, and the
+       answer beneath it says what is happening while it is happening.
+
+       Only the question is sent. The last few exchanges do travel with it,
+       but the server reads them out of its own record rather than taking
+       them from here -- a conversation posted from a browser would be a way
+       to hand the assistant an exchange that never happened, and the answer
+       comes back with the firm's name on it. */
+    function send(asked) {
+      if (!asked || pending) { return; }
+      pending = { asked: asked, asked_by: person };
+      drawThread();
+      post("/api/chat", { asked: asked })
+        .then(function (reply) {
+          pending = null;
+          thread = thread.concat([{
+            kind: reply.kind || "answer",
+            asked: asked,
+            asked_by: person,
+            when: "",
+            said: reply.said || "",
+            withheld: reply.withheld || "",
+            looked_at: reply.looked_at || reply.used || [],
+            task_id: reply.task_id || (reply.task && reply.task.task_id) || "",
+            task: reply.task || null,
+            trouble: ""
+          }]);
+          drawThread();
+        })
+        .catch(function (error) {
+          pending = null;
+          thread = thread.concat([{
+            kind: "answer", asked: asked, asked_by: person, when: "",
+            said: "", withheld: "", looked_at: [], task_id: "", task: null,
+            trouble: said(error) || word("load_failed", "")
+          }]);
+          drawThread();
+        });
+    }
+
+    /* Enter sends it; Shift and Enter puts in a line. The box grows with what
+       is typed into it and stops at a few lines, so a long question is
+       readable without the thread above it disappearing. */
+    function grow() {
+      box.style.height = "auto";
+      box.style.height = Math.min(box.scrollHeight, 132) + "px";
+    }
+    box.addEventListener("input", grow);
+    box.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+    });
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var asked = box.value.trim();
+      if (!asked) { return; }
+      box.value = "";
+      grow();
+      send(asked);
+    });
+    box.focus();
+  }
+
+  /* The thread as the server holds it, which is as the record holds it: every
+     exchange is an event, so the conversation is read back out of the log
+     rather than kept beside it. It is keyed on who asked rather than on this
+     browser, which is why signing in somewhere else brings the same thread.
+
+     A failure here is not shown. An empty conversation is a true statement
+     about a workspace nobody has asked anything in yet, and an error about a
+     route is not something an officer can act on. */
+  function readThread() {
+    return get("/api/chat").then(absorb).catch(function () { return null; });
+  }
+
+  /* Two shapes for one turn, because the route carries the job two ways: as
+     an address, and as the job itself. Both are read, and neither is shown. */
+  function shapeTurns(turns) {
+    return (turns || []).map(function (turn) {
+      return {
+        kind: turn.kind || "answer",
+        asked: turn.asked || "",
+        asked_by: turn.asked_by || "",
+        when: turn.when || "",
+        said: turn.said || "",
+        withheld: turn.withheld || "",
+        looked_at: turn.looked_at || turn.used || [],
+        task_id: turn.task_id || (turn.task && turn.task.task_id) || "",
+        task: turn.task || null,
+        trouble: ""
+      };
+    });
+  }
+
+  function askedBlock(turn) {
+    var meta = [turn.asked_by, turn.when].filter(Boolean).join(" · ");
+    return h`<div class="turn-asked">
+      <p class="turn-said-text">${turn.asked}</p>
+      ${meta ? h`<p class="turn-meta">${meta}</p>` : ""}
+    </div>`;
+  }
+
+  /* What it read, under the answer. The whole of this product's claim is that
+     an answer can be checked, and this is where that is said on the screen. */
+  function readChips(steps) {
+    if (!(steps || []).length) { return ""; }
+    return h`<div class="chips-wrap">
+      <p class="tiny faint">${word("ask_looked_at", "")}</p>
+      <ul class="chips">${steps.map(function (step) {
+        return h`<li>${step}</li>`;
+      })}</ul>
+    </div>`;
+  }
+
+  function turnBlock(turn) {
+    return h`<div class="turn">
+      ${askedBlock(turn)}
+      <div class="turn-said">
+        ${turn.trouble ? h`<p class="note bad">${turn.trouble}</p>` : ""}
+        ${turn.said ? h`<p class="prose">${turn.said}</p>` : ""}
+        ${turn.withheld ? h`<p class="note prose">${turn.withheld}</p>` : ""}
+        ${turn.task_id ? h`
+          <div class="turn-run">
+            ${(turn.task && turn.task.step_count) ? h`<p class="tiny faint">${
+              turn.task.done_count
+            } / ${turn.task.step_count}</p>` : ""}
+            <a class="btn" href="#/run/${encodeURIComponent(turn.task_id)}">${
+              word("run_watch", "Watch it run")
+            }</a>
+          </div>` : ""}
+        ${readChips(turn.looked_at)}
+      </div>
+    </div>`;
+  }
+
+  function waitingBlock(pending) {
+    return h`<div class="turn">
+      ${askedBlock(pending)}
+      <div class="turn-said">
+        <p class="faint small">${word("ask_thinking", "")}</p>
+      </div>
+    </div>`;
   }
 
   /* ---------- onboarding: step one, who is this ---------- */

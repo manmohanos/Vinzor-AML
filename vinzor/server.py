@@ -1158,6 +1158,12 @@ def build_app(engine: Vinzor, keys=None):
             for turn in talk.thread(who):
                 shaped = {
                     "kind": turn.kind, "asked": turn.asked,
+                    # Every turn here is this person's, since the thread is
+                    # read for them -- but a turn that does not say who asked
+                    # it renders as one nobody asked, and the screen showing
+                    # a name beside a new question and none beside an old one
+                    # reads as two different kinds of record.
+                    "asked_by": turn.asked_by,
                     "when": turn.when, "said": turn.said,
                     "withheld": turn.withheld,
                     "looked_at": list(turn.looked_at),

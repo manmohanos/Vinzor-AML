@@ -479,7 +479,23 @@ ul.bullets li { margin-bottom: 4px; }
 .doorway .who .role { color: var(--ink-faint); font-size: 13px; }
 .doorway form { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
 
-/* ---------- home ---------- */
+/* ---------- home ----------
+
+   Five rows and no scroll on the screen this is actually read on: the
+   greeting, the one thing this product is for beside the assistant, five
+   counts, the top of the list beside the shape of the book, and the quiet
+   strip. Density comes from tightening the gaps between things, never from
+   shrinking the type an officer has to read all day.
+
+   Nothing here is a chart. Every figure on this screen is a figure the
+   server sent, and the only bar is the one briefing.py computes a share
+   for. */
+
+.home { display: flex; flex-direction: column; gap: 14px; }
+
+/* Every other screen is a document and wants a foot to scroll into. This one
+   is a briefing and is meant to end where the window does. */
+.sheet-home { padding-bottom: 30px; }
 
 .greeting { font-size: 24px; }
 
@@ -495,7 +511,7 @@ ul.bullets li { margin-bottom: 4px; }
      important control on the product opened inside a hundred and twenty
      pixels of empty white. A card should be the size of what is in it. */
   grid-template-columns: minmax(340px, 1.15fr) minmax(320px, 1fr);
-  gap: 16px;
+  gap: 14px;
   align-items: start;
 }
 @media (max-width: 1120px) { .begin { grid-template-columns: 1fr; } }
@@ -504,16 +520,15 @@ ul.bullets li { margin-bottom: 4px; }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 22px;
+  padding: 20px 22px;
 }
 .begin-primary .eyebrow { margin-bottom: 2px; }
 .begin-primary .btn { align-self: flex-start; }
 .begin-primary .small { margin: 0; }
 
-.ask-card { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.ask-card { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
 .ask-form { display: flex; gap: 8px; }
 .ask-form input { flex: 1; }
-.ask-answer { border-top: 1px solid var(--line-soft); padding-top: 12px; margin-top: 2px; }
 .ask-tries { display: flex; flex-wrap: wrap; gap: 6px; }
 .ask-tries button {
   border: 1px solid var(--line);
@@ -522,28 +537,122 @@ ul.bullets li { margin-bottom: 4px; }
   padding: 4px 11px;
   font-size: 12.5px;
   color: var(--ink-soft);
+  text-align: left;
 }
 .ask-tries button:hover { border-color: var(--accent); color: var(--accent-hover); }
 
+/* -- the five counts -------------------------------------------------------
+   A mark, the server's label, and the server's figure set large enough to be
+   read across a desk. Five to a row on the screen this is used on, and no
+   trend beside any of them: nothing here holds yesterday, so there is no
+   honest comparison to draw and an invented one on a compliance screen is
+   the worst thing this product could print. */
 .tally {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   list-style: none;
   margin: 0;
   padding: 0;
+}
+@media (max-width: 1180px) {
+  .tally { grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); }
 }
 .tally li {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 11px 14px 12px;
+  box-shadow: var(--whisper);
 }
-.tally .count { display: block; font-size: 21px; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
+.tally-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tally-icon { display: flex; flex: none; color: var(--ink-faint); }
+.tally-icon[data-tone="stop"] { color: var(--stop); }
+.tally-icon[data-tone="today"] { color: var(--today); }
+.tally-icon[data-tone="good"] { color: var(--settled); }
+
+/* Geometry travels in the markup; the ink is here, because the policy this
+   page is served under carries no 'unsafe-inline' and a mark that silently
+   loses its stroke is worse than no mark at all. */
+.tally-mark {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tally .count {
+  display: block;
+  margin-top: 6px;
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
 .tally .count[data-tone="stop"] { color: var(--stop); }
 .tally .count[data-tone="today"] { color: var(--today); }
 .tally .count[data-tone="good"] { color: var(--settled); }
-.tally .label { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+.tally .label { display: block; font-size: 13px; color: var(--ink-soft); min-width: 0; }
+.tally-head .label { overflow-wrap: anywhere; }
+
+/* -- the two panels --------------------------------------------------------
+   The top of the list on the left, because that is the work. How long the
+   book has been waiting on the right, because that is the question an
+   inspector opens with and the one a count of open files cannot answer.
+   Where the server sends no bands, the list takes the whole width rather
+   than sitting beside an empty box. */
+.home-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.home-panels.alone { grid-template-columns: 1fr; }
+@media (max-width: 1120px) { .home-panels { grid-template-columns: 1fr; } }
+
+.home-panels .section-head { padding-bottom: 8px; margin-bottom: 8px; }
+.home-panels .strip li { padding: 8px 0; }
+
+table.grid.standing td { padding: 7px 12px 7px 0; vertical-align: middle; }
+.standing-what { color: var(--ink-body); white-space: nowrap; }
+.standing-what .dot { margin-right: 8px; }
+.standing-bar { width: 42%; }
+.standing-bar .bar { display: block; }
+.standing-count { color: var(--ink); font-weight: 600; width: 1%; white-space: nowrap; }
+.standing-note { margin-top: 10px; }
+
+/* -- the quiet strip -------------------------------------------------------
+   What the open files are about. Counts the server sent, each a way into the
+   list, and deliberately the least loud thing on the screen: it is context
+   for the five above it, not a sixth number to read first. */
+.home-bands .eyebrow { display: block; margin-bottom: 6px; }
+.bands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bands a {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 14px 5px 12px;
+  background: var(--sunk);
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.bands a:hover { border-color: var(--accent); background: var(--card); text-decoration: none; }
+.bands .count { font-size: 15px; font-weight: 600; color: var(--ink); }
+.bands .label { font-size: 13px; }
 
 .strip { list-style: none; margin: 0; padding: 0; }
 .strip li {
@@ -557,6 +666,99 @@ ul.bullets li { margin-bottom: 4px; }
 .strip li:last-child { border-bottom: 0; }
 .strip .dot { position: relative; top: -1px; }
 .strip .what { flex: 1 1 260px; min-width: 0; }
+
+/* ---------- the conversation ----------------------------------------------
+
+   One thread, oldest at the top, and the box to type in pinned under it. The
+   thread scrolls; the page does not, because a conversation whose newest turn
+   is somewhere below the fold is a conversation you have to hunt through.
+
+   Nothing here is styled as a chat app. There are no bubbles and no sides:
+   the officer's question is set in the page's own voice, the answer sits
+   under a rule beneath it, and what was read to produce the answer is named
+   in small type underneath. That last part is the product's whole claim, so
+   it is on the screen rather than folded away. */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  /* the sheet's own padding, top and bottom */
+  height: calc(100vh - 102px);
+  max-width: 860px;
+}
+.chat-head { padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+.chat-head h1 { margin-bottom: 4px; }
+
+.chat-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 2px 10px;
+}
+
+.chat-foot {
+  flex: none;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.chat-form { display: flex; gap: 8px; align-items: flex-end; }
+.chat-form textarea {
+  flex: 1;
+  min-height: 42px;
+  max-height: 132px;
+  resize: none;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+.chat-form .btn { flex: none; padding: 10px 18px; }
+
+.turn + .turn {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-soft);
+}
+.turn-said-text {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 16.5px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  max-width: 60ch;
+}
+.turn-meta { margin-top: 3px; font-size: 12px; color: var(--ink-faint); }
+
+/* A rule, not a bubble: the answer plainly belongs to the question above it
+   and is plainly not the officer's own words. */
+.turn-said {
+  margin-top: 11px;
+  padding-left: 14px;
+  border-left: 2px solid var(--line);
+  color: var(--ink-body);
+}
+.turn-said > * + * { margin-top: 10px; }
+.turn-run { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.chips-wrap { padding-top: 2px; }
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 5px 0 0;
+  padding: 0;
+}
+.chips li {
+  border: 1px solid var(--line);
+  background: var(--sunk);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.chat-empty { padding-top: 4px; }
+.chat-opener + .chat-opener { margin-top: 16px; }
+.chat-opener .eyebrow { display: block; margin-bottom: 7px; }
 
 /* ---------- the wizard ---------- */
 
@@ -1134,10 +1336,15 @@ ul.bullets li { margin-bottom: 4px; }
 @page { size: A4; margin: 15mm 14mm; }
 
 @media print {
-  .rail, .skip, .take, .decision, .ask-card, .ask-form, .confirm-bar,
-  .btn, .btn-link { display: none !important; }
+  .rail, .skip, .take, .decision, .ask-card, .ask-form, .chat-foot,
+  .confirm-bar, .btn, .btn-link { display: none !important; }
   .app { min-height: 0; }
   .sheet { margin-left: 0; padding: 0; max-width: none; }
+  /* The conversation is held to the window on screen so its newest turn is
+     never below the fold. On paper there is no window, and a thread cut off
+     at the height of somebody's monitor is a record with the end missing. */
+  .chat { height: auto; max-width: none; }
+  .chat-thread { overflow: visible; padding: 0; }
   .card {
     box-shadow: none;
     border-color: #b0aca2;
