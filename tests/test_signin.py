@@ -727,3 +727,65 @@ def test_the_strongest_match_is_offered_first(workspace):
     _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
     captions = [c["caption"] for c in body.get("candidates") or []]
     assert captions[0] == "Strong One"
+
+
+def test_one_watchlist_entry_found_twice_is_listed_once(workspace):
+    """A name is screened more than once on purpose: an abbreviated name is
+    asked again in full, because measured against forty listed people the
+    initialled form missed seventeen. So the same entry comes back from both
+    searches.
+
+    Listed twice it does not read as one entry found twice. It reads as two
+    people under suspicion, which is the same defect as showing a match with
+    no name -- and on a live run of "Vladimir Putin" it turned three genuine
+    candidates into six.
+    """
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    for score in (0.86, 0.94):
+        engine.ingest(
+            event_type=EventType.SCREENING_COMPLETED,
+            subject=party, occurred_at="2026-08-22", actor="system",
+            payload={"matched": True, "list_types": ["SANCTIONS"],
+                     "basis": {"caption": "Vladimir Putin", "score": score,
+                               "matched_entity": "os:one-and-the-same",
+                               "datasets": ["us_ofac_sdn"],
+                               "listed_properties": {
+                                   "birthDate": ["1952-10-07"]}}})
+
+    _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    found = body.get("candidates") or []
+    assert len(found) == 1, f"one entry was offered as {len(found)} suspects"
+    assert found[0]["score"] == 0.94, "the stronger of the two searches stands"
+
+
+def test_two_different_entries_sharing_a_name_are_both_listed(workspace):
+    """The other half of the same rule. Two people really can share a name --
+    the sanctioned Vladimir Putin and a Vladimir Putin born in 2019 both come
+    back from a live search -- and collapsing them would hide one."""
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    for who, born in (("os:the-president", "1952-10-07"),
+                      ("os:somebody-else", "2019")):
+        engine.ingest(
+            event_type=EventType.SCREENING_COMPLETED,
+            subject=party, occurred_at="2026-08-22", actor="system",
+            payload={"matched": True, "list_types": ["SANCTIONS"],
+                     "basis": {"caption": "Vladimir Putin", "score": 1.0,
+                               "matched_entity": who,
+                               "listed_properties": {"birthDate": [born]}}})
+
+    _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    found = body.get("candidates") or []
+    assert len(found) == 2, "two different entries were collapsed into one"
+    dates = {row["theirs"] for entry in found for row in entry["compared"]
+             if row["label"] == "Date of birth"}
+    assert dates == {"1952-10-07", "2019"}

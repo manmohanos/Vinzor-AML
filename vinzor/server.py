@@ -1414,7 +1414,14 @@ def build_app(engine: Vinzor, keys=None):
             ours = {k: str(v or "") for k, v in
                     (getattr(entity, "attributes", {}) or {}).items()}
 
-            out = []
+            # One row per watchlist entry, however many times it was found.
+            # A name is screened more than once on purpose -- an abbreviated
+            # name is asked again in full, because measured against forty
+            # listed people the initialled form missed seventeen -- so the
+            # same entry comes back from both searches and was being listed
+            # twice. Two identical rows do not read as one entry found twice;
+            # they read as two people under suspicion.
+            out, already = [], {}
             for event in engine.log:
                 if event.event_type is not EventType.SCREENING_COMPLETED:
                     continue
@@ -1448,8 +1455,23 @@ def build_app(engine: Vinzor, keys=None):
                     rows[ours_key] = {"label": label, "theirs": theirs,
                                       "ours": mine, "verdict": verdict}
                 compared = list(rows.values())
+                # Keyed on the watchlist's own identifier for the entry,
+                # which is the only thing that says "this is the same entry".
+                # Two people really can share a caption.
+                key = (basis.get("matched_entity")
+                       or (basis.get("caption"), tuple(basis.get("datasets") or ())))
+                seen_before = already.get(key)
+                if seen_before is not None:
+                    # Keep whichever search scored it higher; a second look
+                    # at the same entry is not new information.
+                    if float(basis.get("score") or 0) > seen_before["score"]:
+                        seen_before["score"] = round(
+                            float(basis.get("score") or 0), 2)
+                    continue
                 aliases = listed.get("alias") or []
-                out.append({
+                already[key] = {"score": round(float(basis.get("score") or 0), 2)}
+                out.append(already[key])
+                already[key].update({
                     "caption": basis.get("caption") or "",
                     "score": round(float(basis.get("score") or 0), 2),
                     "datasets": list(basis.get("datasets") or []),
@@ -1462,6 +1484,7 @@ def build_app(engine: Vinzor, keys=None):
                     "address": ", ".join(
                         str(v) for v in (listed.get("address") or []))[:200],
                 })
+                already[key]["score"] = round(float(basis.get("score") or 0), 2)
             # Strongest first: the one most likely to be the investor is the
             # one the officer should look at before the rest.
             out.sort(key=lambda one: -one["score"])
