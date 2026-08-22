@@ -840,3 +840,126 @@ def test_what_a_kind_may_evidence_is_said_in_words_a_person_uses(workspace):
     for one in body["kinds"]:
         for said in one["evidences"]:
             assert "_" not in said, f"{said!r} is a field name, not a phrase"
+
+
+# ---------------------------------------------------------------------------
+# What the officer already knows, before any document arrives
+# ---------------------------------------------------------------------------
+
+
+def test_the_questions_asked_come_from_the_clause_they_cite(workspace):
+    """An investor is usually sitting opposite with their papers at home, and
+    they know their own date of birth. There was nowhere to put it, so the
+    checks ran against a name and a party kind and clause 5.4.2 reported six
+    things missing that the person in the room could have answered.
+
+    The questions are derived from readiness.py's own table rather than
+    written out again, so the screen collecting them and the check reporting
+    them missing cannot drift apart.
+    """
+    engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    status, body, _ = call(base, "/api/onboarding/questions?kind=PERSON",
+                           cookie=cookie)
+    assert status == 200
+    asked = {q["field"]: q for q in body["questions"]}
+    assert {"dob", "nationality", "country_of_residence"} <= set(asked)
+    assert asked["dob"]["clause"] == "5.4.2(a)(iii)"
+    assert asked["dob"]["sort"] == "date"
+    assert asked["nationality"]["sort"] == "country"
+    # Three upfront and the rest folded away: an officer handed thirty
+    # fields fills in the easy ones and stops.
+    assert sum(1 for q in body["questions"] if q["upfront"]) == 3
+
+    _status, company, _ = call(base, "/api/onboarding/questions?kind=COMPANY",
+                               cookie=cookie)
+    fields = {q["field"] for q in company["questions"]}
+    assert "date_of_incorporation" in fields
+    assert "dob" not in fields, "a company does not have a date of birth"
+
+
+def test_what_the_officer_knows_is_recorded_and_reaches_the_checks(workspace):
+    engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    status, body, _ = call(
+        base, "/api/onboarding",
+        {"name": "Anand Bhat", "kind": "PERSON",
+         "known": {"dob": "1981-03-14", "nationality": "in",
+                   "country_of_residence": "IN"}},
+        cookie=cookie)
+    assert status == 200
+    held = engine.state.graph.entities[body["party_id"]].attributes
+    assert held["dob"] == "1981-03-14"
+    assert held["nationality"] == "IN", "a country is kept as this record keeps one"
+    assert held["country_of_residence"] == "IN"
+
+
+def test_a_date_that_is_not_a_date_is_refused_rather_than_written(workspace):
+    """A malformed date on a permanent record is worse than an empty field,
+    because the empty one is visibly empty."""
+    engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    status, _body, _ = call(
+        base, "/api/onboarding",
+        {"name": "Somebody", "kind": "PERSON",
+         "known": {"dob": "14/03/1981"}},
+        cookie=cookie)
+    assert status == 400
+
+    status, _body, _ = call(
+        base, "/api/onboarding",
+        {"name": "Somebody", "kind": "PERSON",
+         "known": {"nationality": "India"}},
+        cookie=cookie)
+    assert status == 400
+
+
+def test_a_field_nobody_asked_about_is_not_written(workspace):
+    """Only what clause 5.4.2 names is accepted. A caller cannot post
+    arbitrary attributes onto a party's permanent record."""
+    engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    _status, body, _ = call(
+        base, "/api/onboarding",
+        {"name": "Anand Bhat", "kind": "PERSON",
+         "known": {"dob": "1981-03-14", "pep_flag": "0",
+                   "cleared_by": "nobody"}},
+        cookie=cookie)
+    held = engine.state.graph.entities[body["party_id"]].attributes
+    assert held.get("dob") == "1981-03-14"
+    assert "cleared_by" not in held
+    assert "pep_flag" not in held
+
+
+def test_a_country_is_not_quietly_cut_down_until_it_passes(workspace):
+    """"India" was being shortened to "IN" and then validated, which is even
+    the right answer. "Indonesia" became the same "IN", which is not. A
+    truncation that changes a value's meaning and then passes its own check
+    is how a party ends up recorded in the wrong country."""
+    engine, keys, base = workspace
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    for said in ("India", "Indonesia", "Singapore", "I"):
+        status, _body, _ = call(
+            base, "/api/onboarding",
+            {"name": "Somebody " + said, "kind": "PERSON",
+             "known": {"nationality": said}},
+            cookie=cookie)
+        assert status == 400, f"{said!r} was accepted as a country code"
+
+    status, body, _ = call(
+        base, "/api/onboarding",
+        {"name": "Anand Bhat", "kind": "PERSON", "known": {"nationality": "in"}},
+        cookie=cookie)
+    assert status == 200
+    assert engine.state.graph.entities[body["party_id"]].attributes[
+        "nationality"] == "IN"

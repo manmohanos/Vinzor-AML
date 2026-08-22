@@ -181,6 +181,73 @@ def _encode(value: Any) -> Any:
     return value
 
 
+#: How a 5.4.2 attribute is typed, so the screen offers the right control
+#: and this server can refuse a value that is not one. Anything not named
+#: here is free text.
+_ATTRIBUTE_SORTS = {
+    "dob": "date",
+    "date_of_incorporation": "date",
+    "nationality": "country",
+    "country_of_residence": "country",
+    "country_of_incorporation": "country",
+    "jurisdiction": "country",
+    "email": "email",
+}
+
+#: The two or three worth asking on the way in, per party kind. The rest are
+#: offered behind an expander: an officer handed thirty fields fills in the
+#: easy ones and stops, which is the failure this whole wizard exists to
+#: avoid. These three are the ones that change what the checks can do --
+#: nationality sharpens the watchlist query, a date of birth is what later
+#: lets a document agree or disagree with the record, and where somebody
+#: lives is a clause 4.2 risk factor.
+_ASK_FIRST = {
+    "PERSON": ("dob", "nationality", "country_of_residence"),
+    "OTHER": ("country_of_incorporation", "date_of_incorporation", "cin"),
+}
+
+
+def _questions_for(kind) -> list:
+    """What clause 5.4.2 wants to know about a party of this kind.
+
+    Derived from ``readiness``'s own table rather than written out again
+    here. The screen asking the questions and the check reporting them
+    missing then cannot drift apart, which they would within a month if
+    this were a second list -- and the drift would show up as a wizard that
+    collects something nothing looks at, or a check that complains about
+    something nobody was ever asked.
+    """
+    from .model import EntityKind
+    from .readiness import FOR_A_LEGAL_PERSON, FOR_A_PERSON
+
+    person = kind is EntityKind.PERSON
+    table = FOR_A_PERSON if person else FOR_A_LEGAL_PERSON
+    first = _ASK_FIRST["PERSON" if person else "OTHER"]
+
+    out = []
+    for clause, asks, attributes in table:
+        if not attributes or attributes == ("name",):
+            continue        # the name is its own question, above all this
+        # The attribute this question writes: whichever of the ones that
+        # satisfy the clause is named first, unless one of them is in the
+        # short list, in which case that is the one being asked about.
+        field = attributes[0]
+        for candidate in attributes:
+            if candidate in first:
+                field = candidate
+                break
+        out.append({
+            "field": field,
+            "asks": asks,
+            "clause": clause,
+            "sort": _ATTRIBUTE_SORTS.get(field, "text"),
+            "upfront": field in first,
+        })
+    # Contact details are two attributes on one clause line; ask for the one
+    # a firm can actually write to.
+    return out
+
+
 def _filename(name: str, suffix: str = "xlsx") -> str:
     """A download name that survives every operating system.
 
@@ -444,6 +511,45 @@ def build_app(engine: Vinzor, keys=None):
             if country:
                 where = "nationality" if kind is EntityKind.PERSON else "jurisdiction"
                 attributes[where] = country
+
+            # What the officer already knows, before any document arrives.
+            #
+            # An investor is often sitting opposite with their papers at
+            # home, and they know their own date of birth. Refusing to
+            # record it until a passport turns up meant the checks ran
+            # against a name and a party kind, and clause 5.4.2 reported six
+            # things missing that the person in the room could have answered
+            # in twenty seconds.
+            #
+            # Only the fields clause 5.4.2 actually names are accepted, and
+            # each is checked for shape here rather than trusted: a date
+            # that is not a date, written to a permanent record, is worse
+            # than an empty field, because the empty one is visibly empty.
+            offered = body.get("known")
+            if isinstance(offered, dict):
+                allowed = {q["field"]: q["sort"] for q in _questions_for(kind)}
+                for field, sort in allowed.items():
+                    value = str(offered.get(field) or "").strip()[:200]
+                    if not value:
+                        continue
+                    if sort == "date":
+                        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+                            self._problem("unavailable",
+                                          HTTPStatus.BAD_REQUEST)
+                            return
+                    elif sort == "country":
+                        # Checked before it is shortened, not after. Cutting
+                        # first turned "India" into a valid "IN" -- which is
+                        # even correct -- and "Indonesia" into the same "IN",
+                        # which is not. A truncation that changes the meaning
+                        # of a value and then passes its own validation is
+                        # how a party ends up recorded in the wrong country.
+                        value = value.upper()
+                        if not re.fullmatch(r"[A-Z]{2}", value):
+                            self._problem("unavailable",
+                                          HTTPStatus.BAD_REQUEST)
+                            return
+                    attributes[field] = value
             if party not in engine.state.graph.entities:
                 engine.ingest(
                     event_type=EventType.ENTITY_REGISTERED,
@@ -1042,6 +1148,16 @@ def build_app(engine: Vinzor, keys=None):
                 self._export()
             elif route == "/api/report.pdf":
                 self._printed_report()
+            elif route == "/api/onboarding/questions":
+                from .model import EntityKind
+
+                try:
+                    kind = EntityKind(
+                        (self._query("kind") or "PERSON").strip().upper())
+                except ValueError:
+                    self._problem("unavailable", HTTPStatus.BAD_REQUEST)
+                    return
+                self._json({"ui": UI, "questions": _questions_for(kind)})
             elif route == "/api/tasks":
                 self._tasks()
             elif route.startswith("/api/tasks/"):

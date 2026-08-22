@@ -708,6 +708,18 @@ UI = {
     "onboard_kind_evidences": "Can evidence:",
     "onboard_file_them": "File these",
     "onboard_forget_them": "Not these",
+    # What an officer can answer before any document arrives. An investor
+    # sitting opposite knows their own date of birth; there was nowhere to
+    # put it, so the checks ran against a name and a party kind.
+    "onboard_known_heading": "What do you already know about them?",
+    "onboard_known_lead": (
+        "All of this is optional. Anything you leave blank is reported as "
+        "still needed, which is the true statement about it — and "
+        "anything you fill in is what a document will later be checked "
+        "against."
+    ),
+    "onboard_known_more": "Anything else you know",
+    "onboard_known_country": "Two letters, e.g. IN",
     "read_field_name": "Name",
     "read_field_dob": "Date of birth",
     "read_field_nationality": "Nationality",

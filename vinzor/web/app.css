@@ -1625,3 +1625,32 @@ table.grid.standing td { padding: 7px 12px 7px 0; vertical-align: middle; }
 }
 .waiting select:hover { border-color: var(--accent); }
 .waiting li > .tiny { grid-column: 1 / -1; }
+
+/* What the officer already knows, on the way in. Optional, and it says so,
+   so the shape has to read as an offer rather than as a form to complete. */
+.known { display: flex; flex-direction: column; gap: 14px; }
+.known-row { display: flex; flex-direction: column; gap: 3px; }
+.known-row input {
+  font: inherit;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  transition: border-color var(--quick) var(--ease),
+              box-shadow var(--quick) var(--ease);
+}
+.known-row input:hover { border-color: var(--ink-faint); }
+.known-more { margin-top: 2px; }
+.known-more summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-faint);
+  list-style: none;
+  padding: 4px 0;
+}
+.known-more summary::-webkit-details-marker { display: none; }
+.known-more summary::before { content: "+ "; font-weight: 600; }
+.known-more[open] summary::before { content: "\2212 "; }
+.known-more summary:hover { color: var(--accent); }
+.known-more > .known-row { margin-top: 12px; }

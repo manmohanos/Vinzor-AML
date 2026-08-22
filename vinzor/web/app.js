@@ -37,7 +37,10 @@
 
   /* What the officer has typed into the wizard during this sitting. Nothing
      more: it is cleared on reload and never stands in for a record. */
-  var proposal = { name: "", kind: "" };
+  /* `known` is what the officer can answer without a document in front
+     of them. Kept on the proposal so changing the party kind, which changes
+     which questions are asked, does not throw away what was already typed. */
+  var proposal = { name: "", kind: "", known: {} };
 
   /* The one live poll. Cleared on every route change. */
   var poller = null;
@@ -1047,6 +1050,8 @@
           })}
         </div>
 
+        <div id="known"></div>
+
         <div class="wizard-foot">
           <span class="spacer"></span>
           <p class="problem" hidden></p>
@@ -1055,6 +1060,65 @@
           }</button>
         </div>
       </div>`);
+
+    /* What the officer already knows, asked before any document arrives.
+
+       An investor is usually sitting opposite with their papers at home,
+       and they know their own date of birth. There was nowhere to put it,
+       so the checks ran against a name and a party kind and clause 5.4.2
+       reported six things missing that the person in the room could have
+       answered in twenty seconds.
+
+       The questions come from the server, derived from readiness.py's own
+       table of what 5.4.2 asks for -- so the screen collecting them and the
+       check reporting them missing cannot drift apart. Everything here is
+       optional: anything left blank shows up as still needed, which is the
+       true statement about it. */
+    function askKnown() {
+      var box = where.querySelector("#known");
+      if (!box || !proposal.kind) { return; }
+      get("/api/onboarding/questions?kind=" + encodeURIComponent(proposal.kind))
+        .then(function (payload) {
+          absorb(payload);
+          var questions = payload.questions || [];
+          var upfront = questions.filter(function (q) { return q.upfront; });
+          var rest = questions.filter(function (q) { return !q.upfront; });
+          if (!questions.length) { mount(box, ""); return; }
+          mount(box, h`
+            <h2 class="section-head">${word("onboard_known_heading", "")}</h2>
+            <p class="small faint prose">${word("onboard_known_lead", "")}</p>
+            <div class="card pad known">
+              ${upfront.map(knownField)}
+              ${rest.length ? h`<details class="known-more">
+                <summary>${word("onboard_known_more", "Anything else you know")}</summary>
+                ${rest.map(knownField)}
+              </details>` : ""}
+            </div>`);
+          box.querySelectorAll("[data-known]").forEach(function (input) {
+            input.addEventListener("input", function () {
+              proposal.known[input.getAttribute("data-known")] = input.value;
+            });
+            var held = proposal.known[input.getAttribute("data-known")];
+            if (held) { input.value = held; }
+          });
+        })
+        .catch(function () { mount(box, ""); });
+    }
+
+    function knownField(question) {
+      var id = "known-" + question.field;
+      return h`<div class="known-row">
+        <label class="field" for="${id}">${question.asks}</label>
+        <input id="${id}" data-known="${question.field}"
+               type="${question.sort === "date" ? "date"
+                       : (question.sort === "email" ? "email" : "text")}"
+               autocomplete="off"
+               ${question.sort === "country"
+                   ? raw('placeholder="' + esc(word("onboard_known_country", "Two letters, e.g. IN")) + '" maxlength="2"')
+                   : ""}>
+        <span class="tiny faint">${word("clause_prefix", "Clause")} ${question.clause}</span>
+      </div>`;
+    }
 
     var name = where.querySelector("#party-name");
     var onward = where.querySelector("#onward");
@@ -1073,6 +1137,7 @@
         button.setAttribute("aria-pressed",
           button === event.currentTarget ? "true" : "false");
       });
+      askKnown();
       settle();
     });
     settle();
@@ -1086,7 +1151,8 @@
          nothing to attach a document to until one exists. */
       post("/api/onboarding", {
         name: name.value.trim(),
-        kind: proposal.kind
+        kind: proposal.kind,
+        known: proposal.known
       }).then(function (started) {
         go("#/onboard/" + encodeURIComponent(started.party_id || "") +
            "/" + encodeURIComponent(started.task_id || ""));
