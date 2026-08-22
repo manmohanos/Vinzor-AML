@@ -66,9 +66,15 @@ from."*
 
 *"It read the document. Name, date of birth, nationality, passport number —
 and it shows the line it read each one off, so she can check it without
-opening the file. It does not write any of this. She confirms it, because
-'an officer looked at this passport and said it shows this date of birth' is
-the record a regulator wants, and 'our software read a PDF' is not."*
+opening the file. It also shows which reader found each field: a generated
+PDF is parsed deterministically, a photograph is looked at by a model, and
+those are not equally strong claims.*
+
+*It proposes. It does not write. Accepting a proposed field onto the record
+is the next thing being built — today an officer reads it and types it. The
+reason it is a proposal at all is that 'an officer looked at this passport
+and said it shows this date of birth' is the record a regulator wants, and
+'our software read a PDF' is not."*
 
 **Then run the checks.** Eight agents, each one visible as it lands.
 
@@ -154,8 +160,12 @@ guard destroys that paragraph if it invents a figure. A model may judge; only
 recorded facts and deterministic rules may establish.
 
 **"What is not finished?"**
-No qualified person has verified the clause register — it says so on every
-screen. Seven document requirements could not be sourced and are listed
+A proposed field cannot yet be accepted onto the record — the reader
+proposes and an officer retypes it, which is slower than it should be.
+Nothing checks whether a document is genuine, tampered with or conformant to
+its template; it reads what a document says and never asks whether the
+document is real. No qualified person has verified the clause register — it
+says so on every screen. Seven document requirements could not be sourced and are listed
 rather than invented. Eleven of the nineteen clause 4.2 risk factors need a
 person and cannot be read from any record. We have no design partner, no
 price, and no data licence for commercial use of the watchlist.
