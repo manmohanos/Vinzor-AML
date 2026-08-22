@@ -1283,6 +1283,67 @@ def build_app(engine: Vinzor, keys=None):
             payload["ui"] = UI
             self._json(payload)
 
+        def _checks_in_words(self, party: str) -> str:
+            """What the eight checks recorded about one party, as prose.
+
+            The division this product draws is that the checks *establish* and
+            a model may only *interpret*. This is the seam: eight deterministic
+            agents write their findings to the log, and this reads them back
+            into the few hundred words a reader can be handed. Nothing is
+            concluded here, and no check is re-run -- a sentence in here that
+            disagreed with the report beside it would be the worst defect this
+            product could ship.
+
+            An absent check is carried through as absent, in those words. It
+            is the one thing that must survive being summarised: a check that
+            did not happen, flattened into silence, reads to an officer as a
+            check that found nothing.
+            """
+            from .model import EntityKind
+
+            entity = engine.state.graph.entities.get(party)
+            if entity is None:
+                return ""
+            lines = [f"Party: {entity.name} ({entity.kind.value if entity.kind else 'unknown'})"]
+
+            lines.append("")
+            lines.append("What the eight checks recorded:")
+            for step in self._latest_checks(party):
+                said = step.get("headline") or ""
+                how = step.get("how") or ""
+                what = step.get("labelled") or step.get("tool") or ""
+                mark = {"DONE": "settled",
+                        "FOUND_SOMETHING": "needs attention",
+                        "FAILED": "THE CHECK ITSELF FAILED - this was not checked",
+                        "SKIPPED": "not checked"}.get(how, how.lower())
+                lines.append(f"- {what} [{mark}]: {said}")
+                for detail in list(step.get("details") or ())[:4]:
+                    lines.append(f"    {detail}")
+            if len(lines) == 2:
+                lines.append("- no check has been run on this party at all.")
+
+            if entity.kind is not EntityKind.PERSON:
+                answer = engine.state.graph.resolve_ubo(party)
+                lines.append("")
+                lines.append("Beneficial ownership: " + answer.explain())
+                for owner in answer.owners:
+                    lines.append(
+                        f"- {owner.name}: {round(owner.effective_percentage, 1)}%")
+                for circle in answer.cycles:
+                    lines.append("- ownership loops back: "
+                                 + " owns ".join(circle))
+
+            from .requirements import outstanding
+
+            still = outstanding(entity.kind, engine.state.papers.held_for(party))
+            if still:
+                lines.append("")
+                lines.append("Documents still outstanding:")
+                for owed in still[:12]:
+                    lines.append(f"- {owed.requirement.asks_for} "
+                                 f"(clause {owed.requirement.basis})")
+            return "\n".join(lines)[:6000]
+
         def _say(self) -> None:
             """One turn of the conversation.
 
@@ -1294,7 +1355,7 @@ def build_app(engine: Vinzor, keys=None):
             """
             from . import providers
             from .ask import ask
-            from .planning import plan_from
+            from .planning import Plan, plan_from
 
             acting = self._who()
             if acting is None:
@@ -1317,6 +1378,24 @@ def build_app(engine: Vinzor, keys=None):
                 self._problem("needs_question", HTTPStatus.BAD_REQUEST)
                 return
 
+            # What the officer has open. The screen sends an identifier and
+            # nothing else, and everything the model is shown about it is read
+            # here, out of the engine. That division is the whole safety of
+            # this: a browser that could post the *contents* of a report could
+            # tell our own assistant that a sanctioned party was cleared, and
+            # the answer would come back over the firm's name. It can name a
+            # party; it cannot describe one.
+            looking_at = None
+            where = body.get("looking_at")
+            if isinstance(where, dict):
+                at = str(where.get("id") or "").strip()[:64]
+                entity = engine.state.graph.entities.get(at)
+                if entity is not None:
+                    looking_at = {
+                        "kind": "party", "id": at, "label": entity.name,
+                        "record": self._checks_in_words(at),
+                    }
+
             transport = None
             from . import providers
             try:
@@ -1325,7 +1404,15 @@ def build_app(engine: Vinzor, keys=None):
             except Exception:
                 transport = None
 
-            plan = plan_from(asked, transport)
+            # Routed only when there is a routing question to answer. A
+            # sentence typed into the box on a party's own report is a
+            # question about that party -- it is not a request to set agents
+            # working, and putting it through the router meant "what matters
+            # most here?" came back as "nothing in that matched a job this
+            # can do", because the words name no subject. The subject is the
+            # report it was typed into.
+            plan = (Plan(kind="answer") if looking_at
+                    else plan_from(asked, transport))
             today = date.today().isoformat()
 
             if plan.refused:
@@ -1350,7 +1437,7 @@ def build_app(engine: Vinzor, keys=None):
                     answered = ask(engine, asked,
                                    transport=providers.conversation(now=_utcnow),
                                    person=acting, asked_at=today,
-                                   earlier=earlier)
+                                   earlier=earlier, looking_at=looking_at)
                 except Exception as failure:
                     # A reader that cannot be reached is a normal state,
                     # not an error page: the officer is told and can ask

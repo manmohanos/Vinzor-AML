@@ -1495,3 +1495,18 @@ table.grid.standing td { padding: 7px 12px 7px 0; vertical-align: middle; }
   .btn:hover, .tally li:hover, .bands a:hover,
   .ask-tries button:hover, .kind:hover { transform: none; }
 }
+
+/* The report's own assistant. It sits below the findings and above the
+   decision, which is where it belongs in the reading order: after what was
+   established, before what only a person may do. */
+.report-ask .ask-form { margin-top: 2px; }
+.report-ask-said {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.report-ask-said .turn-said-text {
+  font-weight: 550;
+  color: var(--ink);
+  margin-bottom: 8px;
+}

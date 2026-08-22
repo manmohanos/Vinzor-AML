@@ -1622,8 +1622,16 @@
           }</p>` : ""}
         </section>
 
+        <div id="ask-this-report"></div>
+
         <div id="the-decision"></div>
       </div>`);
+
+    /* The eight checks establish; this interprets. It is given the party's
+       identifier and nothing else -- everything it reads about them is
+       fetched by the server out of the record, so the page cannot describe a
+       party to the assistant, only name one. */
+    reportAsk(document.getElementById("ask-this-report"), party);
 
     /* The same file from either place it can be asked for, built out of what
        this screen was given plus the party's permanent record -- so the
@@ -2820,6 +2828,85 @@ a { color: #000; }
      of it, and is allowed to fail: a report whose permanent record could not
      be read is not saved quietly without the warning that governs who may
      read it. */
+  /* Ask about the party in front of you.
+
+     The eight checks are deterministic and stay that way: they decide what is
+     true, and this decides nothing. What it adds is the reading -- which of
+     eight findings matters most, what they mean together, and what the
+     officer should do next -- which is a judgement, and judgement is the one
+     thing a model is allowed to do here.
+
+     Only the identifier travels. Everything the assistant is told about this
+     party is read by the server out of the record, because a page that could
+     post the *contents* of a report could tell our own assistant that a
+     sanctioned party had been cleared. */
+  function reportAsk(where, party) {
+    if (!where || !party || !party.id) { return; }
+    var tries = [
+      word("report_ask_try_one", "What matters most here, and what should I do next?"),
+      word("report_ask_try_two", "What is stopping this file from being settled?")
+    ];
+    mount(where, h`<section class="card pad stack-tight report-ask">
+      <h2 class="section-head">${word("ask_open", "Ask about this")}</h2>
+      <p class="small faint prose">${
+        word("report_ask_lead", "")
+      }</p>
+      <div class="ask-tries">${tries.map(function (one) {
+        return h`<button type="button" data-try="${one}">${one}</button>`;
+      })}</div>
+      <form class="ask-form">
+        <input type="text" name="asked" autocomplete="off"
+               placeholder="${word("ask_placeholder", "")}"
+               aria-label="${word("ask_open", "Ask about this")}">
+        <button type="submit" class="btn btn-primary">${word("ask_go", "Ask")}</button>
+      </form>
+      <div class="report-ask-said" hidden></div>
+    </section>`);
+
+    var form = where.querySelector("form");
+    var box = where.querySelector("input[name=asked]");
+    var said = where.querySelector(".report-ask-said");
+    var busy = false;
+
+    function put(html) { said.hidden = false; mount(said, html); }
+
+    function send(asked) {
+      if (!asked || busy) { return; }
+      busy = true;
+      put(h`<p class="turn-said-text">${asked}</p>
+            <p class="small faint">${word("ask_thinking", "")}</p>`);
+      post("/api/chat", { asked: asked, looking_at: { id: party.id } })
+        .then(function (reply) {
+          busy = false;
+          var text = reply.said || reply.withheld || "";
+          put(h`<p class="turn-said-text">${asked}</p>
+            <div class="turn-said"><p class="prose">${text}</p>
+            ${(reply.looked_at || []).length ? h`<div class="chips-wrap">
+              <p class="tiny eyebrow">${word("ask_looked_at", "It read:")}</p>
+              <ul class="chips">${(reply.looked_at || []).map(function (one) {
+                return h`<li>${one}</li>`;
+              })}</ul></div>` : ""}</div>`);
+        })
+        .catch(function () {
+          busy = false;
+          put(h`<p class="problem">${word("ask_failed", "")}</p>`);
+        });
+    }
+
+    where.querySelectorAll("[data-try]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        box.value = button.getAttribute("data-try");
+        send(box.value);
+      });
+    });
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var asked = (box.value || "").trim();
+      box.value = "";
+      send(asked);
+    });
+  }
+
   function downloadAction(where, gather) {
     if (!where) { return; }
     mount(where, h`

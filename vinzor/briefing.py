@@ -628,6 +628,21 @@ UI = {
     "ask_go": "Ask",
     "ask_thinking": "Reading your records…",
     "ask_looked_at": "It read:",
+    # The report's own assistant. The eight checks decide what is true;
+    # this reads what they decided. The lead says so plainly, because an
+    # officer who thinks the sentence below it *is* the check has been
+    # misled about which part of this product is deterministic.
+    "report_ask_lead": (
+        "The eight checks above decide what is true. This reads them back "
+        "and tells you what they mean together — it can look at "
+        "everything on this party and change nothing, and it settles no file."
+    ),
+    "report_ask_try_one": "What matters most here, and what should I do next?",
+    "report_ask_try_two": "What is stopping this file from being settled?",
+    "ask_failed": (
+        "The assistant could not be reached. Every finding above was read "
+        "from the record and is unaffected."
+    ),
     "ask_examples_heading": "Try",
     "ask_examples": [
         "What needs my attention most urgently today?",

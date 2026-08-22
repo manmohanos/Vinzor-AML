@@ -677,6 +677,19 @@ def ask(engine, question: str, *, transport, person: str = "",
     kind = (looking_at or {}).get("kind", "")
     identifier = (looking_at or {}).get("id", "")
     label = (looking_at or {}).get("label", "")
+
+    # What the eight checks said about this party, already read out of the
+    # record by the caller. It is put in front of the model so it has
+    # something to interpret rather than something to fetch -- the checks
+    # establish, and this reads what they established.
+    #
+    # It also goes into the figures ledger, which is the part that needs
+    # justifying. Everything in it came out of the engine on this request;
+    # a percentage or a count quoted from here is quoting the record, not
+    # inventing one. The guard exists to catch figures with no source, and
+    # this has a source. What it must never carry is anything the *browser*
+    # sent -- see the server, which builds this from the party id alone.
+    extract = str((looking_at or {}).get("record") or "").strip()
     if kind and label:
         where = {
             "file": f'the file {identifier!r}, which is "{label}"',
@@ -686,6 +699,16 @@ def ask(engine, question: str, *, transport, person: str = "",
             f"The officer is looking at {where}. If their question says "
             f'"this", "here", "it" or "they", that is what they mean. Read it '
             f"with the right tool before answering.\n\n"
+        )
+    if extract:
+        here = here + (
+            "This is what the eight checks recorded about that party. Read it "
+            "as the record's own words: interpret it for the officer, say "
+            "what matters most and what it means they should do next. Do not "
+            "read it back to them line by line, and do not state anything it "
+            "does not say. Where it says a check did not happen, that is not "
+            "the same as a check that found nothing, and you must not let it "
+            "read that way.\n\n" + extract + "\n\n"
         )
 
     # Rendered into the opening turn rather than replayed as assistant
@@ -718,7 +741,11 @@ def ask(engine, question: str, *, transport, person: str = "",
         {"role": "user", "content": before + here + question},
     ]
     steps: list[Step] = []
-    seen: list[str] = [question]
+    # The extract counts as a source for the figures guard. It was read out
+    # of the engine on this request, so a number quoted from it is quoting
+    # the record; without this, every answer about a report would be withheld
+    # for repeating the report's own percentages back at the officer.
+    seen: list[str] = [question] + ([extract] if extract else [])
     bill = _Bill()
 
     for _ in range(MAX_STEPS):
