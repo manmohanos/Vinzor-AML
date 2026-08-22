@@ -433,7 +433,11 @@ ul.bullets li { margin-bottom: 4px; }
 
 .begin {
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) minmax(340px, 1.15fr);
+  /* The primary action is wider than the ask box, not narrower. It was the
+     other way round, which put a free-text chat box above and beside the one
+     thing an officer came here to do -- and answered "what is red today"
+     third. The ask box has its own nav entry and its own screen. */
+  grid-template-columns: minmax(340px, 1.25fr) minmax(300px, 1fr);
   gap: 16px;
   align-items: stretch;
 }

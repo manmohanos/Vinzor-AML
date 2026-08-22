@@ -33,7 +33,7 @@ from typing import Any, Optional
 from .assist import DEFAULT_BUDGET_USD, draft_use
 from .dossier import dossier
 from .credentials import Credentials, Refused, weak
-from .briefing import (MESSAGES, PARTY_KINDS, UI, brief, case_file,
+from .briefing import (CHOICES, MESSAGES, PARTY_KINDS, UI, brief, case_file,
                        import_progress, import_receipt, import_report, party,
                        qualified_name, regulatory, report, screening,
                        shared_names)
@@ -628,6 +628,30 @@ def build_app(engine: Vinzor, keys=None):
 
             return Cabinet(getattr(engine.log, "path", ":memory:"))
 
+        def _latest_checks(self, party: str) -> list:
+            """The most recent onboarding run for this party, step by step.
+
+            Read off the log rather than held anywhere: a run is a sequence
+            of recorded events and the newest one about this party is the
+            answer. Empty where nobody has run the checks, which the report
+            then says rather than implying they passed.
+            """
+            from .model import EventType
+
+            newest, steps = "", {}
+            for event in engine.log:
+                if event.event_type is not EventType.TASK_GIVEN:
+                    continue
+                if str((event.payload or {}).get("inputs", {}).get("party")
+                       or "") == party:
+                    newest = event.subject
+            if not newest:
+                return []
+            for event in engine.log:
+                if event.event_type is EventType.TASK_STEP                         and event.subject == newest:
+                    steps[event.payload.get("number")] = event.payload
+            return [steps[k] for k in sorted(steps)]
+
         def _onboarding(self, party: str) -> None:
             """Everything an officer reads before deciding about this party.
 
@@ -673,6 +697,30 @@ def build_app(engine: Vinzor, keys=None):
                      "case_type": c.case_type,
                      "status": c.status.value}
                     for c in open_files],
+                # The three things only a person may do, named by briefing.py
+                # rather than by this handler -- the screen was reconstructing
+                # them from a case file, which works and means the contract
+                # and the server disagreed about where the wording lives.
+                "decision": {
+                    "required": True,
+                    "permanence": UI.get("why", ""),
+                    "options": [
+                        {"outcome": choice.outcome.value,
+                         "label": choice.label,
+                         "explains": choice.means}
+                        for choice in CHOICES
+                    ],
+                },
+                # Including the checks that found nothing, which is the
+                # evidence an inspector asks for and the thing a screen most
+                # easily leaves out.
+                "checks": [
+                    {"what": step.get("labelled") or step.get("tool"),
+                     "said": step.get("headline"),
+                     "outcome": step.get("how"),
+                     "detail": list(step.get("details") or ())}
+                    for step in self._latest_checks(party)
+                ],
                 "ownership": ({
                     "conclusion": answer.conclusion.value,
                     "explains": answer.explain(),
