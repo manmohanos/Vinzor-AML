@@ -608,7 +608,29 @@ def build_app(engine: Vinzor, keys=None):
                 self._problem("not_found", HTTPStatus.NOT_FOUND)
                 return
 
-            self._json({"filed": True, "filename": filename, "kind": kind})
+            # Read it, and propose nothing more. What the document appears
+            # to show comes back beside what the record already holds; a
+            # person confirms, because "an officer looked at this passport
+            # and said it shows this date of birth" is the record clause
+            # 5.4.5 asks for and "our software read a PDF" is not.
+            from .extraction import read as read_document
+
+            entity = engine.state.graph.entities.get(party)
+            reading = read_document(
+                data, kind=kind,
+                holds=dict(getattr(entity, "attributes", {}) or {},
+                           name=getattr(entity, "name", "")))
+            self._json({
+                "filed": True, "filename": filename, "kind": kind,
+                "read": {
+                    "unreadable": reading.unreadable,
+                    "proposals": [
+                        {"field": p.field, "value": p.value,
+                         "seen_as": p.seen_as, "agrees": p.agrees,
+                         "on_record": p.on_record}
+                        for p in reading.proposals],
+                },
+            })
 
         def _cabinet(self):
             """Where the bytes live: in the workspace file, beside the log.
