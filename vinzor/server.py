@@ -811,6 +811,11 @@ def build_app(engine: Vinzor, keys=None):
                      "detail": list(step.get("details") or ())}
                     for step in self._latest_checks(party)
                 ],
+                # Every watchlist entry the name brought back, with what
+                # each one says about itself beside what we hold. Screening
+                # returns candidates and the officer eliminates them; they
+                # cannot do that from a caption and a score.
+                "candidates": self._candidates(party),
                 "ownership": ({
                     "conclusion": answer.conclusion.value,
                     "explains": answer.explain(),
@@ -1370,6 +1375,97 @@ def build_app(engine: Vinzor, keys=None):
                                       transport=transport))
             payload["ui"] = UI
             self._json(payload)
+
+        #: What a watchlist entry calls a field, against what the record
+        #: calls it. Only the four an officer actually eliminates a match on.
+        MATCH_ON = (
+            ("birthDate", "dob", "Date of birth"),
+            ("nationality", "nationality", "Nationality"),
+            ("passportNumber", "id_document_number", "Document number"),
+            ("idNumber", "id_document_number", "Identity number"),
+        )
+
+        def _candidates(self, party: str) -> list:
+            """Every watchlist entry this party's name brought back, with the
+            details that let an officer rule one out.
+
+            Screening a name returns candidates, not answers. "Vladimir
+            Putin" matches the sanctioned one; it also matches every other
+            person of that name, and the officer's actual job is to
+            eliminate the ones who are not their investor. They do that on
+            date of birth, nationality and document number.
+
+            All of that was already recorded -- ``screening.py`` captures the
+            identifying properties off each entry precisely because "a
+            possible match is a name and nothing else" is useless -- and the
+            screen showed a caption and a score. So the officer was told
+            there was a match and given nothing to resolve it with, which is
+            the shape of an alert that gets cleared by guessing.
+
+            Nothing here decides. Where the record and the entry disagree it
+            says so; where either side is silent it says nothing rather than
+            reading a blank as a difference.
+            """
+            from .model import EventType
+
+            entity = engine.state.graph.entities.get(party)
+            if entity is None:
+                return []
+            ours = {k: str(v or "") for k, v in
+                    (getattr(entity, "attributes", {}) or {}).items()}
+
+            out = []
+            for event in engine.log:
+                if event.event_type is not EventType.SCREENING_COMPLETED:
+                    continue
+                if event.subject != party or not event.payload.get("matched"):
+                    continue
+                basis = event.payload.get("basis") or {}
+                if not basis.get("caption"):
+                    # A match with nothing to show is not a candidate. An
+                    # empty row in this list reads as a second suspect.
+                    continue
+                listed = basis.get("listed_properties") or {}
+                # Grouped by the field on *our* record, because two watchlist
+                # properties can answer the same question -- passportNumber
+                # and idNumber are both the document number, and listing them
+                # separately printed the same blank row twice.
+                rows: dict = {}
+                for theirs_key, ours_key, label in self.MATCH_ON:
+                    values = listed.get(theirs_key) or []
+                    theirs = ", ".join(str(v) for v in values)[:120]
+                    mine = ours.get(ours_key, "")
+                    if not theirs and not mine:
+                        continue
+                    held = rows.get(ours_key)
+                    if held and (held["theirs"] or not theirs):
+                        continue
+                    verdict = ""
+                    if theirs and mine:
+                        verdict = ("same"
+                                   if theirs.strip().lower() == mine.strip().lower()
+                                   else "different")
+                    rows[ours_key] = {"label": label, "theirs": theirs,
+                                      "ours": mine, "verdict": verdict}
+                compared = list(rows.values())
+                aliases = listed.get("alias") or []
+                out.append({
+                    "caption": basis.get("caption") or "",
+                    "score": round(float(basis.get("score") or 0), 2),
+                    "datasets": list(basis.get("datasets") or []),
+                    "topics": list(basis.get("topics") or []),
+                    "kinds": list(event.payload.get("list_types") or []),
+                    "compared": compared,
+                    "aliases": [str(a) for a in aliases][:6],
+                    "position": ", ".join(
+                        str(v) for v in (listed.get("position") or []))[:200],
+                    "address": ", ".join(
+                        str(v) for v in (listed.get("address") or []))[:200],
+                })
+            # Strongest first: the one most likely to be the investor is the
+            # one the officer should look at before the rest.
+            out.sort(key=lambda one: -one["score"])
+            return out
 
         def _checks_in_words(self, party: str) -> str:
             """What the eight checks recorded about one party, as prose.

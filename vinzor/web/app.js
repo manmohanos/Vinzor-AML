@@ -1688,6 +1688,8 @@
           }</p>` : ""}
         </section>
 
+        ${candidateBlock(record.candidates)}
+
         <div id="ask-this-report"></div>
 
         <div id="the-decision"></div>
@@ -1925,6 +1927,75 @@
   function rulesHeading(finding, file) {
     return clausesOf(finding, file).length > 1
       ? word("rules_heading", "") : word("rule_heading", "");
+  }
+
+  /* Who the watchlist actually returned, and what each one says about
+     itself beside what we hold.
+
+     Screening a name gives back candidates, not answers. "Kavya Singh"
+     matches the sanctioned one and also every other person of that name, and
+     the officer's real job is to eliminate the ones who are not their
+     investor -- which they do on date of birth, nationality and document
+     number. All of that was recorded on the day of the search and the screen
+     showed a caption and a score, so the officer was told there was a match
+     and given nothing to resolve it with. That is the shape of an alert that
+     gets cleared by guessing.
+
+     Nothing here concludes. A difference is shown as a difference and not as
+     a clearance: people change nationality, records carry the wrong year, and
+     a sanctioned party is not obliged to have filed an accurate date of birth
+     with anybody. */
+  function candidateBlock(candidates) {
+    var found = candidates || [];
+    if (!found.length) { return ""; }
+    return h`<section class="card pad stack-tight">
+      <h2 class="section-head">${
+        word("candidates_heading", "Who the watchlist returned")
+      }</h2>
+      <p class="small prose">${
+        found.length === 1
+          ? word("candidates_one", "")
+          : (word("candidates_many", "").replace("{n}", String(found.length)))
+      }</p>
+      <p class="tiny faint prose">${word("candidates_caveat", "")}</p>
+      <ul class="candidates">${found.map(function (one, index) {
+        return h`<li class="candidate">
+          <div class="candidate-head">
+            <span class="candidate-name">${
+              one.caption || word("candidates_unnamed", "An unnamed entry")
+            }</span>
+            <span class="badge" data-tone="${
+              one.score >= 0.9 ? "stop" : (one.score >= 0.8 ? "today" : "week")
+            }">${word("candidates_score", "match")} ${one.score}</span>
+            ${(one.datasets || []).length
+              ? h`<span class="tiny faint">${one.datasets.join(", ")}</span>` : ""}
+          </div>
+          ${one.position ? h`<p class="tiny faint">${one.position}</p>` : ""}
+          ${(one.aliases || []).length
+            ? h`<p class="tiny faint">${
+                word("candidates_also_known", "Also known as:")
+              } ${one.aliases.join("; ")}</p>` : ""}
+          ${(one.compared || []).length ? h`<table class="candidate-table">
+            <thead><tr>
+              <th></th>
+              <th>${word("candidates_theirs", "The listed entry")}</th>
+              <th>${word("candidates_ours", "Your investor")}</th>
+            </tr></thead>
+            <tbody>${one.compared.map(function (row) {
+              return h`<tr data-verdict="${row.verdict}">
+                <td class="candidate-field">${row.label}</td>
+                <td>${row.theirs || word("candidates_silent", "not stated")}</td>
+                <td>${row.ours || word("candidates_silent", "not stated")}</td>
+              </tr>`;
+            })}</tbody>
+          </table>` : ""}
+          ${(one.compared || []).some(function (r) { return r.verdict === "different"; })
+            ? h`<p class="tiny candidate-note">${
+                word("candidates_differs", "")
+              }</p>` : ""}
+        </li>`;
+      })}</ul>
+    </section>`;
   }
 
   function clauseTags(finding, file) {

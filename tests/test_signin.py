@@ -594,3 +594,136 @@ def test_what_the_sign_in_does_not_hide_is_written_down():
     assert "stated limit" in said
     assert "rate limit" in said
     assert "24 requests" in said
+
+
+from vinzor.model import EventType          # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Who the watchlist returned
+#
+# Screening a name gives back candidates, not answers. The officer's job is
+# to eliminate the ones who are not their investor, and they do that on date
+# of birth, nationality and document number -- all of which screening.py has
+# recorded since it was written, and none of which reached the screen.
+# ---------------------------------------------------------------------------
+
+
+def test_a_match_is_shown_with_what_would_rule_it_out(workspace):
+    """A caption and a score is an alert an officer can only close by
+    guessing. What they need is the entry's own identifying detail beside
+    the firm's."""
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    engine.ingest(
+        event_type=EventType.SCREENING_COMPLETED,
+        subject=party, occurred_at="2026-08-22", actor="system",
+        payload={"matched": True, "list_types": ["SANCTIONS"],
+                 "basis": {"caption": "Somebody Else", "score": 0.86,
+                           "datasets": ["us_ofac_sdn"],
+                           "listed_properties": {"birthDate": ["1965-02-20"],
+                                                 "nationality": ["RU"]}}})
+
+    status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    assert status == 200
+    found = body.get("candidates") or []
+    assert found, "a recorded match reached the screen as nothing at all"
+    entry = found[0]
+    assert entry["caption"] == "Somebody Else"
+    assert entry["score"] == 0.86
+    labels = {row["label"]: row for row in entry["compared"]}
+    assert labels["Date of birth"]["theirs"] == "1965-02-20"
+    assert labels["Nationality"]["theirs"] == "RU"
+
+
+def test_a_field_only_one_side_holds_is_not_called_a_difference(workspace):
+    """Reading a blank as a disagreement would hand an officer a reason to
+    clear an alert that nothing supports."""
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    engine.ingest(
+        event_type=EventType.SCREENING_COMPLETED,
+        subject=party, occurred_at="2026-08-22", actor="system",
+        payload={"matched": True, "list_types": ["SANCTIONS"],
+                 "basis": {"caption": "Somebody Else", "score": 0.7,
+                           "listed_properties": {}}})
+
+    _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    for entry in body.get("candidates") or []:
+        for row in entry["compared"]:
+            if not row["theirs"] or not row["ours"]:
+                assert row["verdict"] == "", (
+                    "a blank on one side was reported as a difference")
+
+
+def test_a_match_with_nothing_to_show_is_not_listed_as_a_suspect(workspace):
+    """An empty row in this list reads as a second person under suspicion."""
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    engine.ingest(
+        event_type=EventType.SCREENING_COMPLETED,
+        subject=party, occurred_at="2026-08-22", actor="system",
+        payload={"matched": True, "basis": {}})
+
+    _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    for entry in body.get("candidates") or []:
+        assert entry["caption"], "an entry with no name was offered as a match"
+
+
+def test_one_record_field_answered_twice_is_printed_once(workspace):
+    """A watchlist entry can carry both a passport number and an identity
+    number, and both answer the same question about our record. Listed
+    separately they printed the same blank row twice."""
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    engine.ingest(
+        event_type=EventType.SCREENING_COMPLETED,
+        subject=party, occurred_at="2026-08-22", actor="system",
+        payload={"matched": True,
+                 "basis": {"caption": "Somebody Else", "score": 0.8,
+                           "listed_properties": {
+                               "passportNumber": ["X1234567"],
+                               "idNumber": ["ID-9999"]}}})
+
+    _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    entry = (body.get("candidates") or [{}])[0]
+    numbers = [r for r in entry.get("compared", [])
+               if r["theirs"] in ("X1234567", "ID-9999")]
+    assert len(numbers) == 1, "the same question was asked twice"
+    assert numbers[0]["theirs"] == "X1234567", "a stated value was preferred"
+
+
+def test_the_strongest_match_is_offered_first(workspace):
+    engine, keys, base = workspace
+    a_file(engine)
+    keys.set_password("Meera Nair", GOOD, WHEN)
+    cookie = signed_in(base, keys)
+
+    party = next(iter(engine.state.graph.entities))
+    for caption, score in (("Weak One", 0.71), ("Strong One", 0.95)):
+        engine.ingest(
+            event_type=EventType.SCREENING_COMPLETED,
+            subject=party, occurred_at="2026-08-22",
+            actor="system",
+            payload={"matched": True,
+                     "basis": {"caption": caption, "score": score,
+                               "listed_properties": {"nationality": ["RU"]}}})
+
+    _status, body, _ = call(base, f"/api/onboarding/{party}", cookie=cookie)
+    captions = [c["caption"] for c in body.get("candidates") or []]
+    assert captions[0] == "Strong One"

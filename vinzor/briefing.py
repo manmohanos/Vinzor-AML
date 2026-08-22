@@ -659,6 +659,38 @@ UI = {
     "report_download_kind": (
         "PDF — the format to attach to an email"
     ),
+    # Who the watchlist returned. Screening gives back candidates and the
+    # officer eliminates them; a caption and a score is not enough to do
+    # that with, and the identifying detail was recorded all along.
+    "candidates_heading": "Who the watchlist returned",
+    "candidates_one": (
+        "One entry on a watchlist came back for this name. It may not be "
+        "your investor. Compare what the entry says about itself against "
+        "what you hold."
+    ),
+    "candidates_many": (
+        "{n} entries on the watchlists came back for this name. Most of them "
+        "will not be your investor — a name match is a question, not an "
+        "answer. Compare what each entry says about itself against what you "
+        "hold."
+    ),
+    "candidates_caveat": (
+        "A difference here is not a clearance. People change nationality, "
+        "records carry the wrong year, and somebody under sanction is not "
+        "obliged to have given anybody an accurate date of birth. This is "
+        "what you need to make the judgement; it does not make it."
+    ),
+    "candidates_theirs": "The listed entry",
+    "candidates_ours": "Your investor",
+    "candidates_silent": "not stated",
+    "candidates_score": "match",
+    "candidates_also_known": "Also known as:",
+    "candidates_unnamed": "An unnamed entry",
+    "candidates_differs": (
+        "At least one identifying detail differs. That is the usual reason "
+        "an alert like this is closed — record which detail, and why it "
+        "satisfied you."
+    ),
     "read_field_name": "Name",
     "read_field_dob": "Date of birth",
     "read_field_nationality": "Nationality",
