@@ -143,30 +143,37 @@ CASES = [
              "clock."),
 
     Case(
-        "04-inconsistent-dob", "Anand Bhat", "Person",
-        "Two documents from the same person giving two dates of birth.",
-        "The reader proposes the passport's date beside the one already on "
-        "the record and marks them as disagreeing. It does not choose. One "
-        "of them is wrong and a person decides which.",
+        "04-inconsistent-dob", "Priya Hussain (per_0001, already on the book)",
+        "Person",
+        "A passport whose date of birth, nationality and document number all "
+        "disagree with what the firm already holds on an existing party.",
+        "Three fields come back marked as disagreeing, each printed beside "
+        "what the record says. Nothing is overwritten and nothing is chosen: "
+        "one of the two is wrong and a person decides which.",
         caught=True,
         papers={
-            "passport-bhat.pdf": document(
-                "Republic of India - Passport", "MINISTRY OF EXTERNAL AFFAIRS",
-                [("Surname", "BHAT"), ("Given name", "ANAND"),
-                 ("Nationality", "INDIAN"),
-                 ("Date of birth", "14/03/1981"),
-                 ("Passport number", "Z9999999")],
-                "Specimen."),
-            "pan-bhat-DIFFERENT-DOB.pdf": document(
-                "Permanent Account Number Card", "INCOME TAX DEPARTMENT",
-                [("Name", "ANAND BHAT"),
-                 ("Date of birth", "14/03/1979"),
-                 ("Permanent account number", "ZZZPB0000Z")],
-                "Specimen. The date of birth here is deliberately two years "
-                "out from the passport."),
+            "passport-hussain-CONFLICTS.pdf": document(
+                "Republic of Singapore - Passport", "IMMIGRATION AUTHORITY",
+                [("Surname", "HUSSAIN"), ("Given name", "PRIYA"),
+                 ("Nationality", "BRITISH"),
+                 ("Date of birth", "06/11/1968"),
+                 ("Passport number", "Z9999004"),
+                 ("Date of expiry", "03/05/2030")],
+                "Specimen. The record says 6 November 1972, Singaporean, "
+                "document PER_00018077. All three are different here."),
         },
-        note="Upload the passport first and confirm it, then the PAN card. "
-             "The second upload is the one that shows the disagreement."),
+        note="ONBOARD NOTHING. Open the EXISTING party per_0001 (Priya "
+             "Hussain) and file this passport against her, because the "
+             "disagreement is only visible where the firm already holds a "
+             "value to disagree with. "
+             "  A party created fresh on stage has nothing on the record but "
+             "a name, so only a name can disagree -- which is what case 05 "
+             "shows. There is no way to confirm a proposed field onto the "
+             "record yet: attributes are written once, when a party is "
+             "registered, and nothing updates them afterwards. So the "
+             "reader proposes and the screen shows the proposal, but the "
+             "'and a person confirms' half of that sentence is not built. "
+             "Say so if asked; it is the honest state."),
 
     Case(
         "05-name-mismatch", "Priya Menon", "Person",
