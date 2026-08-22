@@ -1328,10 +1328,23 @@ def build_app(engine: Vinzor, keys=None):
                 return
 
             if plan.kind == "answer":
+                # What was said before, read back out of the log rather than
+                # taken from the browser. The screen posts a question and
+                # nothing else: a history arriving from the client would be a
+                # way to hand our own assistant a conversation that never
+                # happened, and the reply goes out with the firm's name on it.
+                # Keyed on who is asking, so the same officer picks the thread
+                # up on another machine and somebody else never sees it.
+                earlier = tuple(
+                    {"asked": turn.asked, "said": turn.said}
+                    for turn in engine.state.talk.thread(acting)
+                    if turn.kind == "answer" and turn.said and not turn.withheld
+                )
                 try:
                     answered = ask(engine, asked,
                                    transport=providers.conversation(now=_utcnow),
-                                   person=acting, asked_at=today)
+                                   person=acting, asked_at=today,
+                                   earlier=earlier)
                 except Exception as failure:
                     # A reader that cannot be reached is a normal state,
                     # not an error page: the officer is told and can ask

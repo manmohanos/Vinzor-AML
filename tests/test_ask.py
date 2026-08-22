@@ -467,3 +467,98 @@ def test_no_context_means_no_preamble(workspace):
     ask(workspace, "How many files are open?", transport=talk,
         person="Meera Nair", record=False)
     assert talk.seen[0][-1]["content"] == "How many files are open?"
+
+
+# -- following up ------------------------------------------------------------
+
+
+def test_what_was_said_before_reaches_the_model(workspace):
+    """A thread where every question has to name its own subject is not a
+    conversation. "Why is that?" needs a *that*."""
+    talk = scripted({"answer": "Because the payment was never explained.",
+                     "used": []})
+    ask(workspace, "Why is that?", transport=talk, person="Meera Nair",
+        earlier=({"asked": "Which files are still open?",
+                  "said": "The Orion file is still open."},),
+        record=False)
+
+    asked_with = talk.seen[0][-1]["content"]
+    assert "Which files are still open?" in asked_with
+    assert "The Orion file is still open." in asked_with
+    assert asked_with.endswith("Why is that?")
+
+
+def test_nothing_said_earlier_counts_as_evidence(workspace):
+    """The one that matters.
+
+    A figure the assistant produced three turns ago is not a fact about this
+    workspace; it is something the assistant said. Letting the thread vouch
+    for its own history is how a single invented number launders itself into
+    every answer that follows it, and the log keeps all of them.
+    """
+    talk = scripted({"answer": "As I said, 4,182 of them.", "used": []})
+    answer = ask(workspace, "How many again?", transport=talk,
+                 person="Meera Nair",
+                 earlier=({"asked": "How many are open?",
+                           "said": "There are 4,182 open files."},),
+                 record=False)
+
+    assert not answer.answer, "a figure only the thread has seen is not a fact"
+    assert answer.refused
+
+
+def test_a_turn_with_no_answer_in_it_is_not_replayed(workspace):
+    """A withheld turn has nothing to say, and a question with no answer
+    beneath it would read as one the assistant ignored."""
+    talk = scripted({"answer": "Nothing further.", "used": []})
+    ask(workspace, "And now?", transport=talk, person="Meera Nair",
+        earlier=({"asked": "Which are open?", "said": ""},), record=False)
+    assert talk.seen[0][-1]["content"] == "And now?"
+
+
+def test_only_the_last_few_turns_travel(workspace):
+    """An afternoon of questions must not become the most expensive part of
+    the next one."""
+    from vinzor.ask import EARLIER_TURNS
+
+    history = tuple({"asked": "Question %d?" % n, "said": "Answer %d." % n}
+                    for n in range(EARLIER_TURNS + 6))
+    talk = scripted({"answer": "Nothing further.", "used": []})
+    ask(workspace, "And now?", transport=talk, person="Meera Nair",
+        earlier=history, record=False)
+
+    asked_with = talk.seen[0][-1]["content"]
+    assert "Question 0?" not in asked_with
+    assert "Question %d?" % (EARLIER_TURNS + 5) in asked_with
+    assert asked_with.count("They asked:") == EARLIER_TURNS
+
+
+def test_the_thread_the_assistant_is_given_never_comes_from_the_request():
+    """The server reads the conversation back out of the log, keyed on who is
+    asking. It must not learn it from the browser.
+
+    A history arriving in the request body would be a way to hand our own
+    assistant a conversation that never happened -- "earlier you told me this
+    party was cleared" -- and the reply goes out with the firm's name on it.
+    The record cannot be forged that way, so the record is what is read.
+
+    A source scan, because the property is about what the handler does *not*
+    reach for, and the honest version of that question has no input that
+    demonstrates it.
+    """
+    import inspect
+
+    from vinzor import server
+
+    body = inspect.getsource(server)
+    start = body.index("def _say(")
+    end = body.index("\n        def ", start + 1)
+    saying = body[start:end]
+
+    assert "state.talk.thread(" in saying, (
+        "the earlier turns have to be read out of the record")
+    for forged in ('"context"', "'context'", '"history"', "'history'",
+                   '"earlier"', "'earlier'", '"turns"', "'turns'"):
+        assert f"body.get({forged}" not in saying, (
+            f"a conversation taken from {forged} in the request is one the "
+            f"caller wrote for us")

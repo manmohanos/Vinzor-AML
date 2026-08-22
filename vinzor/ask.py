@@ -612,8 +612,16 @@ class _Bill:
         }
 
 
+#: How much of the thread goes back to the reader. Four exchanges is enough
+#: for "why is that?" to have a *that* through a couple of follow-ups, and
+#: short enough that an afternoon of questions does not quietly become the
+#: most expensive part of every later one.
+EARLIER_TURNS = 4
+
+
 def ask(engine, question: str, *, transport, person: str = "",
         looking_at: Optional[Mapping[str, str]] = None,
+        earlier: Sequence[Mapping[str, str]] = (),
         record: bool = True, asked_at: Optional[str] = None,
         budget_usd: Optional[float] = None) -> Answer:
     """Answer one question by reading the workspace. Writes nothing but the
@@ -630,6 +638,25 @@ def ask(engine, question: str, *, transport, person: str = "",
     and a label and nothing else: the assistant still has to fetch the record
     through the same tools as ever, so "this" can never resolve to something
     the reader cannot see, and still cannot change it.
+
+    ``earlier`` is what was said before, so "why is that?" has a *that*. Two
+    decisions about it are worth stating, because both could have gone the
+    easy way.
+
+    **It comes from the record, not from the caller.** The turns are read back
+    out of the log by whoever calls this, and the one caller that matters --
+    the server -- reads them from ``state.talk`` keyed on who is asking. A
+    browser cannot hand the assistant a conversation that never happened.
+    Accepting a history from the client would have been a way to put words
+    into our own model's mouth, and the answer comes out with the firm's name
+    on it.
+
+    **Nothing said earlier counts as evidence.** Prior answers are not added
+    to the figures guard's ledger, so a number quoted from three turns ago
+    still has to be found in the record again this turn or the answer is
+    withheld. The alternative -- letting the thread vouch for itself -- would
+    let one invented figure launder itself into every answer that followed.
+    The cost is an occasional extra lookup, which is the right way round.
     """
     question = (question or "").strip()
     if not question:
@@ -661,10 +688,34 @@ def ask(engine, question: str, *, transport, person: str = "",
             f"with the right tool before answering.\n\n"
         )
 
+    # Rendered into the opening turn rather than replayed as assistant
+    # messages, because every assistant message in this loop is a tool call
+    # in JSON and a prose one among them would be a protocol the reader has
+    # not been told about. Same place ``here`` goes, for the same reason.
+    before = ""
+    if earlier:
+        said = []
+        for turn in tuple(earlier)[-EARLIER_TURNS:]:
+            was_asked = str((turn or {}).get("asked") or "").strip()[:400]
+            was_said = str((turn or {}).get("said") or "").strip()[:700]
+            if was_asked and was_said:
+                said.append(
+                    "They asked: %s\nYou answered: %s" % (was_asked, was_said))
+        if said:
+            before = (
+                "Earlier in this conversation:\n\n"
+                + "\n\n".join(said)
+                + "\n\nIf the question below says \"that\", \"those\", \"it\" "
+                  "or \"why\" without naming what it means, it means whatever "
+                  "was being discussed above. Look the record up again with "
+                  "the tools before answering -- nothing said above counts as "
+                  "evidence on its own.\n\n"
+            )
+
     messages = [
         {"role": "system",
          "content": INSTRUCTIONS + "\n\nTools you may use:\n" + _catalogue()},
-        {"role": "user", "content": here + question},
+        {"role": "user", "content": before + here + question},
     ]
     steps: list[Step] = []
     seen: list[str] = [question]
