@@ -552,10 +552,11 @@ ul.bullets li { margin-bottom: 4px; }
   gap: 10px;
   padding: 9px 0;
   border-bottom: 1px solid var(--line-soft);
+  flex-wrap: wrap;
 }
 .strip li:last-child { border-bottom: 0; }
 .strip .dot { position: relative; top: -1px; }
-.strip .what { flex: 1; }
+.strip .what { flex: 1 1 260px; min-width: 0; }
 
 /* ---------- the wizard ---------- */
 
@@ -698,7 +699,7 @@ ul.bullets li { margin-bottom: 4px; }
   border-left: 3px solid var(--later);
   border-radius: var(--radius);
   background: var(--card);
-  padding: 16px 18px;
+  padding: 18px 20px;
   margin-bottom: 12px;
   box-shadow: var(--whisper);
 }
@@ -707,10 +708,74 @@ ul.bullets li { margin-bottom: 4px; }
 .finding[data-tone="week"] { border-left-color: var(--week); }
 .finding[data-tone="later"] { border-left-color: var(--later); }
 
-.finding h3 { margin-bottom: 6px; }
-.finding .because { color: var(--ink-soft); max-width: 68ch; }
-.finding .because p { margin-bottom: 6px; }
-.clauses { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+/* -- one file, in the order a person asks about it -------------------------
+   What is wrong, why it matters, what I do now -- and nothing else above the
+   fold. The separation is space and type size, not rules and not colour: the
+   only colour on this block is the severity stripe down its left edge, which
+   was already there and already means something.
+
+   The headline is the one thing set large. It is a single sentence written
+   by the server, and it is what an officer with somebody sitting opposite
+   them reads in the first second. */
+.file > * + * { margin-top: 22px; }
+
+.file-headline {
+  margin-top: 5px;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  max-width: 44ch;
+}
+
+.file-why .clauses,
+.file-now .bullets { margin-top: 7px; }
+
+/* The three buttons sit closer to their heading here than they do at the
+   foot of a report, where they close a whole page rather than one file. */
+.file-now .decision { margin-top: 18px; }
+
+.file-ref { font-size: 13px; color: var(--ink-faint); }
+
+/* -- the fold ---------------------------------------------------------------
+   Everything nobody reads until they are challenged: the sentences behind
+   the headline, the compared rows, the payment's own reference, the order
+   things happened in. Closed, and the same control everywhere it appears. */
+.fold { border-top: 1px solid var(--line-soft); padding-top: 12px; }
+.fold > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 11.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after {
+  content: "+";
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+.fold[open] > summary::after { content: "\2212"; }
+.fold > summary:hover { color: var(--ink); }
+.fold-body { margin-top: 4px; }
+.fold-body > * { margin-top: 12px; }
+
+/* -- the clauses behind a file ---------------------------------------------
+   One row each: the number, then the rule in the plainest words the product
+   has for it, then "says who?" for the regulator's own sentence underneath.
+   They were laid out as a wrapping row of chips, which fits a number and
+   nothing else -- and a number on its own is the citation this product
+   exists not to give. */
+.clauses { list-style: none; margin: 0; padding: 0; }
+.clauses > li + li { margin-top: 5px; }
 .clause {
   font-size: 12px;
   border: 1px solid var(--line);
@@ -792,9 +857,28 @@ ul.bullets li { margin-bottom: 4px; }
 .items { list-style: none; margin: 0; padding: 0; }
 .items > li { border-top: 1px solid var(--line-soft); padding: 12px 0; }
 .items > li:first-child { border-top: 0; }
-.item-line { display: flex; gap: 10px; align-items: baseline; }
-.item-line .what { flex: 1; }
-.item-open { margin-top: 12px; }
+
+/* The party, then what is wrong with them, then how urgent it is. Two lines
+   rather than one sentence: a column of names can be scanned, and a column
+   of "Name -- USD 1,222,462 received 31 May 2026, reference TX-737609"
+   has to be read. */
+.item-line { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.item-what { flex: 1 1 300px; min-width: 0; }
+.item-who { display: block; color: var(--ink); font-weight: 600; }
+.item-why { display: block; font-size: 13.5px; color: var(--ink-soft); max-width: 68ch; }
+
+/* An opened file is set into the row it belongs to rather than floating
+   under it, so the three buttons at the bottom of it plainly belong to this
+   party and not to the next one down. */
+.item-open {
+  margin-top: 14px;
+  padding: 18px 20px;
+  background: var(--sunk);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.group-why .clauses { margin-top: 6px; }
 
 .quote {
   border-left: 2px solid var(--line);
@@ -840,22 +924,31 @@ ul.bullets li { margin-bottom: 4px; }
    footnote with no book is a citation: nobody reading it can tell whether
    the rule says what we claim. Folded away by default, because the number is
    what an officer scans and the sentence is what they open when challenged. */
-.clause-source { margin: 6px 0 0; }
+/* --indigo and --indigo-wash were removed from :root when the accent became
+   ink; these four rules went on naming them. An undefined custom property is
+   not a fallback, it is an invalid value: the affordance lost its colour, and
+   the regulator's own words lost the tint and the rule that set them apart
+   from the restatement above them. Ink, bone and the hairline, like the rest
+   of the page. */
+.clause-source { margin: 0; }
 .clause-source > summary {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px;
   cursor: pointer; list-style: none; padding: 2px 0;
 }
 .clause-source > summary::-webkit-details-marker { display: none; }
 .clause-source > summary::after {
-  content: "says who?"; font-size: 12px; color: var(--indigo);
+  content: "says who?"; font-size: 12px; color: var(--ink-faint);
 }
+.clause-source > summary:hover::after { color: var(--ink); }
 .clause-source[open] > summary::after { content: "hide"; }
-.clause-source > summary:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
-.clause-heading { font-size: 12px; color: var(--ink-soft); }
+.clause-source > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.clause-plain { flex: 1 1 22ch; font-size: 13.5px; color: var(--ink-soft); }
+/* A rule and an indent, no fill. The regulator's own words are quoted on a
+   white card on the report and on a sunk panel inside an opened row, and a
+   tint that separates them from one of those disappears into the other. */
 .clause-says {
-  margin: 6px 0 0; padding: 10px 14px;
-  border-left: 3px solid var(--indigo);
-  background: var(--indigo-wash);
+  margin: 6px 0 0; padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--line);
   font-size: 14px; line-height: 1.55; color: var(--ink);
   max-width: 68ch;
 }
@@ -865,4 +958,202 @@ ul.bullets li { margin-bottom: 4px; }
 .clause-unverified {
   margin: 6px 0 0; font-size: 12px; line-height: 1.5;
   color: var(--today); max-width: 68ch;
+}
+
+/* ---------- ownership, drawn ------------------------------------------------
+   The two findings that matter on an ownership walk are shapes, not
+   sentences: a chain that turns back on itself, and a chain that stops
+   before it reaches a person. Listed as lines they read as more text; drawn,
+   they are the first thing seen. So the loop is red and closes visibly back
+   onto the party, and the open end is amber, dashed, and ends in nothing.
+
+   No colour here is new. The severity ramp already means "stop" and "today"
+   everywhere else on the screen, and an ownership circle is a stop.
+
+   Every rule below sets an SVG presentation property from a class rather
+   than an attribute, because the Content-Security-Policy this page is served
+   under carries no 'unsafe-inline' — a fill written into the markup as
+   style="" would simply be dropped, and a drawing that silently loses its
+   colour is worse than one that never had any. */
+
+.tree {
+  margin: 0 0 16px;
+  padding: 14px 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--whisper);
+}
+
+/* The box is 880 units wide whatever the window is: the browser scales it to
+   the column it lands in, so a 1440-wide screen and a sheet of A4 get the
+   same drawing at two sizes rather than two layouts. */
+.tree-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: var(--sans);
+}
+
+/* On the party record the drawing already sits in a card of its own. */
+.tree-card .tree {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.tree-note {
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.tree-edge { fill: none; stroke: var(--ink-soft); stroke-width: 1.1; }
+.tree-edge-open {
+  stroke: var(--today);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+}
+.tree-open-end { fill: var(--card); stroke: var(--today); stroke-width: 1.6; }
+
+.tree-box { fill: var(--card); stroke: var(--line); stroke-width: 1; }
+.tree-box-party { fill: var(--sunk); stroke: var(--ink); stroke-width: 1.6; }
+.tree-loop .tree-box {
+  fill: var(--stop-wash);
+  stroke: var(--stop);
+  stroke-width: 1.6;
+}
+.tree-loose .tree-box {
+  fill: var(--today-wash);
+  stroke: var(--today);
+  stroke-width: 1.6;
+  stroke-dasharray: 7 4;
+}
+
+.tree-party-name { fill: var(--ink); font-size: 17px; font-weight: 600; }
+.tree-party-kind { fill: var(--ink-faint); font-size: 12px; }
+.tree-name { fill: var(--ink); font-size: 14px; font-weight: 550; }
+.tree-pct { fill: var(--ink); font-size: 20px; font-weight: 600; }
+.tree-label { font-size: 13px; font-weight: 600; }
+.tree-loop .tree-label { fill: var(--stop); }
+.tree-loose .tree-label { fill: var(--today); }
+
+/* The percentage rides the edge it belongs to, so it cannot be mistaken for
+   a second figure about the person underneath it. */
+.tree-pill { fill: var(--page); stroke: var(--line); stroke-width: 1; }
+.tree-pill-text { fill: var(--ink-body); font-size: 12px; font-weight: 550; }
+
+.tree-meter-track { fill: var(--line-soft); }
+.tree-meter-fill { fill: var(--accent); }
+/* The regulator's line, drawn on its own bone-coloured halo so that it stays
+   visible whether it falls on the filled part of the meter or the empty
+   part. Slate, not a severity colour: a threshold is not an urgency. */
+.tree-meter-halo { fill: var(--card); }
+.tree-meter-tick { fill: var(--week); }
+/* A holding past the top of the meter's scale: the bar is full and this says
+   so, rather than pretending the scale reached it. */
+.tree-meter-over { fill: var(--ink); }
+
+.tree-ring {
+  fill: none;
+  stroke: var(--stop);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.tree-ring-head { fill: var(--stop); }
+.tree-glyph-open circle { fill: var(--today); }
+.tree-return { fill: none; stroke: var(--stop); stroke-width: 1.8; }
+.tree-return-head { fill: var(--stop); }
+
+.tree-foot { fill: var(--ink-soft); font-size: 12.5px; }
+.tree-foot-note { fill: var(--ink-faint); font-size: 12px; }
+
+/* Below the width at which the type inside the drawing stops being type, the
+   drawing stops shrinking and scrolls inside its own box instead. That is the
+   same bargain the wide tables on this page already make, and the reason the
+   body itself never scrolls sideways at any width. Screen only: in print the
+   page is narrow by definition and the rule below governs. */
+@media screen and (max-width: 1120px) {
+  .tree { overflow-x: auto; }
+  .tree-svg { min-width: 660px; }
+}
+
+/* Printed, this drawing is evidence: it goes into the file a regulator is
+   shown. So it is never allowed to break across two sheets, it is held to
+   the width of an A4 text block, and its colours are kept — a loop that
+   prints in the same grey as everything else has lost the only thing it was
+   drawn to say. */
+@media print {
+  .tree {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none;
+    border-color: #b0aca2;
+  }
+  .tree-svg { max-width: 170mm; margin: 0 auto; }
+  .tree, .tree * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* ---------- taking it away ----------
+
+   The officer is asked for the file, not for the screen — by their board, by
+   a bank, by an inspector. So every screen that holds a report holds the way
+   to take it away, on the line under the party's name where somebody looking
+   for it will look. */
+
+.take { display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+        margin-top: 14px; }
+.take-part { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+
+/* The one sentence on the party record that governs who may read it. Not a
+   tint: a rule and a solid mark, so it is still a warning on a photocopy.
+   The record page is the only page in the product that is dangerous in the
+   wrong hands, and the danger is not that it holds secrets — it is that its
+   existence discloses that a customer was examined (clause 4.1(d), and
+   dossier.py's own docstring at length). */
+.confidential {
+  border-left: 3px solid var(--ink);
+  margin-bottom: 20px;
+}
+
+/* ---------- Ctrl-P ----------
+
+   Every screen here is something somebody eventually prints, and what comes
+   out of the printer must be the record and not the furniture around it. The
+   navigation goes, the buttons go, and the three decision buttons go with
+   them: a decision is made on the screen, never on paper. A4 with printer
+   margins, and cards that do not break across two sheets.
+
+   The downloaded report carries its own copy of these rules, because it is
+   read on machines that have never had this stylesheet. */
+@page { size: A4; margin: 15mm 14mm; }
+
+@media print {
+  .rail, .skip, .take, .decision, .ask-card, .ask-form, .confirm-bar,
+  .btn, .btn-link { display: none !important; }
+  .app { min-height: 0; }
+  .sheet { margin-left: 0; padding: 0; max-width: none; }
+  .card {
+    box-shadow: none;
+    border-color: #b0aca2;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .finding, .file, .clause-source, table.grid tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* Folded away on screen because it is only read when somebody is
+     challenged. On paper there is no unfolding it later, and the regulator's
+     own words are the whole argument. */
+  details { display: block; }
+  details::details-content { content-visibility: visible; block-size: auto; }
+  .confidential { border-left-width: 3px; border-left-color: #000; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 10px;
+                           word-break: break-all; }
 }

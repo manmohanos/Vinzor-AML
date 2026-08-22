@@ -527,12 +527,26 @@
       return h`<p class="note good">${brief.all_clear || brief.nothing_needed || ""}</p>`;
     }
     var lines = [];
+    var said = {};
     groups.forEach(function (group) {
       (group.items || []).forEach(function (item) {
-        if (lines.length < 4) {
-          lines.push({ tone: group.tone, line: item.line || item.headline,
-                       urgency: item.urgency || group.urgency, file: item.case_id });
-        }
+        if (lines.length >= 4) { return; }
+        /* The reason once, and then what tells the rest of them apart.
+           Four lines that all read "Money arrived from a party that may be
+           on a sanctions list" say one thing four times and never say which
+           payment. Both sentences are the server's; which one a line gets,
+           and whether it repeats a badge the line above it is already
+           wearing, is furniture. The dot keeps the colour either way. */
+        var reason = item.headline || "";
+        var again = !!(reason && said[reason]);
+        said[reason] = true;
+        lines.push({
+          tone: group.tone,
+          who: item.who || item.line || "",
+          why: again ? (shown(item.about) || reason) : (reason || shown(item.about)),
+          urgency: again ? "" : (item.urgency || group.urgency),
+          file: item.case_id
+        });
       });
     });
     return h`
@@ -544,8 +558,13 @@
         ${lines.map(function (line) {
           return h`<li>
                      <span class="dot" data-tone="${line.tone || "later"}"></span>
-                     <span class="what">${line.line}</span>
-                     <span class="badge" data-tone="${line.tone || "later"}">${line.urgency}</span>
+                     <span class="what">
+                       <span class="item-who">${line.who}</span>
+                       <span class="item-why">${line.why}</span>
+                     </span>
+                     ${line.urgency ? h`<span class="badge" data-tone="${
+                       line.tone || "later"
+                     }">${line.urgency}</span>` : ""}
                      ${line.file ? h`<button type="button" class="btn-link small"
                                        data-open-file="${line.file}">${
                        word("open_file", "")
@@ -1037,6 +1056,14 @@
     var record = null;
     var files = [];
     var run = null;
+    /* The party's permanent record, asked for as this screen opens rather
+       than when the download is pressed. It is what the downloaded file
+       opens with -- the warning about who may read it -- and it carries the
+       decisions in the deciders' own words and the seal over the records
+       cited. Nothing here waits for it: it is a second request running
+       beside the first, and the report renders whether it arrives or not. */
+    var recorded = get("/api/records/" + encodeURIComponent(partyId))
+      .catch(function () { return null; });
 
     get("/api/onboarding/" + encodeURIComponent(partyId))
       .then(function (payload) {
@@ -1071,7 +1098,7 @@
         if (wordsForDeciding(record, files).options.length) { return null; }
         return theMorning().catch(function () { return null; });
       })
-      .then(function () { drawReport(where, record, files, run); })
+      .then(function () { drawReport(where, record, files, run, recorded); })
       .catch(function (error) { failed(where, error); });
   }
 
@@ -1116,7 +1143,11 @@
         rows: record.checks.map(function (check) {
           return { what: shown(check.what), middle: shown(check.source),
                    said: cleanSentence(check.said), tone: outcomeTone(check.outcome),
-                   details: [] };
+                   /* Named two ways by the route during this rebuild, and
+                      both are read. A check whose detail is dropped reads on
+                      the page, and in the file downloaded off it, as a check
+                      that found nothing. */
+                   details: cleanLines(check.detail || check.details) };
         })
       };
     }
@@ -1133,7 +1164,8 @@
     };
   }
 
-  function drawReport(where, record, files, run) {
+  function drawReport(where, record, files, run, recorded) {
+    var say = reportWords();
     var party = record.party || {};
     var checked = checkRows(record, run);
     var owed = record.outstanding || [];
@@ -1146,19 +1178,18 @@
         <div class="head">
           <h1>${party.name || ""}</h1>
           <p class="soft">${kindWord(party.kind)}</p>
+          <div class="take" id="take-report"></div>
         </div>
 
         <section>
-          <h2 class="section-head">${
-            word("report_checked", "What was checked, and against what")
-          }</h2>
+          <h2 class="section-head">${say.checked}</h2>
           ${checked.rows.length ? h`
             <div class="table-wrap">
               <table class="grid">
                 <thead><tr>
-                  <th>${word("report_col_check", "Check")}</th>
+                  <th>${say.col_check}</th>
                   <th>${checked.middle}</th>
-                  <th>${word("report_col_result", "What it found")}</th>
+                  <th>${say.col_result}</th>
                 </tr></thead>
                 <tbody>${checked.rows.map(function (row) {
                   return h`<tr>
@@ -1172,15 +1203,11 @@
                   </tr>`;
                 })}</tbody>
               </table>
-            </div>` : h`<p class="empty">${
-              word("report_checked_none", "Nothing has been run for this party yet.")
-            }</p>`}
+            </div>` : h`<p class="empty">${say.checked_none}</p>`}
         </section>
 
         <section>
-          <h2 class="section-head">${
-            word("report_outstanding", "What is still outstanding")
-          }</h2>
+          <h2 class="section-head">${say.outstanding}</h2>
           ${owed.length ? h`<ul class="owed">${owed.map(function (item) {
             var need = item.requirement || item;
             var unevidenced = item.held_but_unevidenced || need.held_but_unevidenced;
@@ -1192,51 +1219,53 @@
                 ${need.basis ? h`<div class="owed-basis">${need.basis}</div>` : ""}
               </div>
             </li>`;
-          })}</ul>` : h`<p class="note good">${
-            word("onboard_owed_none", "Nothing further is outstanding.")
-          }</p>`}
+          })}</ul>` : h`<p class="note good">${say.owed_none}</p>`}
           ${(record.not_modelled && record.not_modelled.length) ? h`
-            <h3 class="section-head">${
-              word("onboard_not_modelled", "Not checked here")
-            }</h3>
+            <h3 class="section-head">${say.not_modelled}</h3>
             <ul class="bullets small prose">${record.not_modelled.map(function (line) {
               return h`<li>${line}</li>`;
             })}</ul>` : ""}
         </section>
 
         <section>
-          <h2 class="section-head">${word("report_findings", "What was found")}</h2>
+          <h2 class="section-head">${say.findings}</h2>
           ${findings.length ? findings.map(function (finding, index) {
             var file = (files || [])[index];
+            /* The file's own headline first, and the evidence line only
+               where there is no file. The evidence line is the record's
+               own summary of what fired -- "SANCTIONS match for Kavya
+               Singh" -- and the leading word there is a value out of the
+               engine, not a word anybody says. It was reaching the screen:
+               `cleanSentence` only drops a token with an underscore in it,
+               so ADVERSE_MEDIA was caught and SANCTIONS was not. */
             return h`<div class="finding" data-tone="${severityTone(finding.severity)}">
-              <h3>${cleanSentence(finding.summary) || (file && file.headline) || ""}</h3>
-              ${(file && file.because) ? h`<div class="because prose">${
-                file.because.map(function (line) { return h`<p>${line}</p>`; })
-              }</div>` : ""}
-              ${(file && file.to_close_this && file.to_close_this.length) ? h`
-                <p class="tiny eyebrow">${word("to_close_heading", "")}</p>
-                <ul class="bullets small prose">${file.to_close_this.map(function (line) {
-                  return h`<li>${line}</li>`;
-                })}</ul>` : ""}
-              ${clauseTags(finding, file)}
+              ${fileBlock({
+                headline: (file && file.headline)
+                  || cleanSentence(finding.summary) || "",
+                rules_heading: rulesHeading(finding, file),
+                clauses: clauseTags(finding, file),
+                steps: (file && file.to_close_this) || [],
+                detail: theDetail(file)
+              })}
             </div>`;
-          }) : h`<p class="note good">${
-            word("report_findings_none", "—")
-          }</p>`}
+          }) : h`<p class="note good">${say.findings_none}</p>`}
         </section>
 
         <section>
-          <h2 class="section-head">${
-            word("report_ownership", "Who is behind this party")
-          }</h2>
+          <h2 class="section-head">${say.ownership}</h2>
           ${ownershipSaid(ownership) ? h`<p class="prose">${
             ownershipSaid(ownership)
           }</p>` : ""}
-          ${ownerChain(ownership)}
-          ${(!ownershipSaid(ownership) && !((ownership && ownership.owners) || []).length)
-            ? h`<p class="empty">${
-                word("report_ownership_none", "Nothing about ownership is on the record.")
+          ${ownershipTree(ownership, party, ownershipNote(record, files))}
+          ${ownerRows(ownership).length
+            ? h`<p class="tiny eyebrow">${
+                word("report_ownership_in_words", "The same, in words")
               }</p>` : ""}
+          ${ownerChain(ownership)}
+          ${(!ownershipSaid(ownership) && !ownerRows(ownership).length
+             && !((ownership && ownership.cycles) || []).length
+             && !(ownership && ownership.conclusion))
+            ? h`<p class="empty">${say.ownership_none}</p>` : ""}
           ${cycleLines(ownership).length ? h`
             <ul class="bullets small prose">${cycleLines(ownership).map(function (line) {
               return h`<li>${line}</li>`;
@@ -1248,6 +1277,16 @@
 
         <div id="the-decision"></div>
       </div>`);
+
+    /* The same file from either place it can be asked for, built out of what
+       this screen was given plus the party's permanent record -- so the
+       document somebody sends to their board and the screen they read it on
+       cannot say different things. */
+    downloadAction(document.getElementById("take-report"), function () {
+      return Promise.resolve(recorded).then(function (doc) {
+        return documentFor(doc, record, files, run);
+      });
+    });
 
     decisionBlock(document.getElementById("the-decision"), {
       heading: word("report_decision", "What only a person may now do"),
@@ -1261,11 +1300,18 @@
     });
   }
 
-  /* The ownership answer as a sentence. The machine-readable conclusion beside
-     it is a value the records are keyed by and is never printed. */
+  /* The ownership answer as a sentence, or nothing.
+
+     The machine-readable conclusion beside it is a value the records are
+     keyed by and is never printed. It used to be the fallback here, and
+     `shown()` let it through: the sweep for implementation vocabulary looks
+     for an underscore, and INCOMPLETE has none — so the word INCOMPLETE was
+     on the report, in front of an officer, as the whole of what we had to
+     say about who owns a company. Where the sentence does not survive, the
+     drawing carries the product's own words instead (`ownershipNote`). */
   function ownershipSaid(ownership) {
     if (!ownership) { return ""; }
-    return cleanSentence(ownership.explains) || shown(ownership.conclusion);
+    return cleanSentence(ownership.explains);
   }
 
   /* A circular holding, where the walk found one, and only where it came back
@@ -1284,6 +1330,182 @@
     return lines;
   }
 
+  /* ---------- one file, in the order a person asks about it ----------
+
+     A file has to answer three questions, and an officer with somebody
+     sitting opposite them has about five seconds to get through all three:
+     what is wrong, why does it matter, what do I do now. So they are the
+     three things on the screen, in that order, and nothing else is -- the
+     sentences behind the headline, the compared rows, the payment's own
+     reference and the order things happened in all sit folded underneath,
+     closed, because none of them is read until somebody is challenged.
+
+     It used to be the other way round. The file opened on two paragraphs of
+     explanation, then a table, and the three buttons that are the entire
+     point of the screen were below all of it. Every sentence here is still
+     the server's: what this decides is the order, and what is folded.
+
+     The same block does the finding on an onboarding report and the file
+     opened in the list, deliberately -- an officer should not have to learn
+     two shapes for one thing. */
+  function fileBlock(parts) {
+    var steps = parts.steps || [];
+    return h`
+      <div class="file">
+        <div class="file-what">
+          <p class="eyebrow">${word("what_happened", "What happened")}</p>
+          <p class="file-headline">${parts.headline || ""}</p>
+        </div>
+
+        ${parts.clauses ? h`
+          <div class="file-why">
+            <p class="eyebrow">${parts.rules_heading || ""}</p>
+            ${parts.clauses}
+          </div>` : ""}
+
+        ${(steps.length || parts.decides) ? h`
+          <div class="file-now">
+            ${steps.length ? h`
+              <p class="eyebrow">${word("to_close_heading", "")}</p>
+              <ul class="bullets small prose">${steps.map(function (line) {
+                return h`<li>${line}</li>`;
+              })}</ul>` : ""}
+            ${parts.decides ? h`<div class="file-decision"></div>` : ""}
+          </div>` : ""}
+
+        ${parts.detail ? h`
+          <details class="fold">
+            <summary>${word("the_detail", "The detail")}</summary>
+            <div class="fold-body">${parts.detail}</div>
+          </details>` : ""}
+      </div>`;
+  }
+
+  /* Everything below the fold, out of a file or out of a list item -- the two
+     carry the same fields under the same names, and the file adds the order
+     things happened in. Empty means empty: a fold with nothing behind it is
+     worse than no fold, so this returns nothing at all and `fileBlock` omits
+     it. */
+  function theDetail(source) {
+    if (!source) { return ""; }
+    var reference = shown(source.line || source.about || "");
+    var because = source.because || [];
+    var rows = source.side_by_side || [];
+    var moments = (source.timeline || []).filter(function (moment) {
+      return cleanSentence(moment && moment.what);
+    });
+    if (!reference && !because.length && !rows.length && !moments.length
+        && !source.corroboration) {
+      return "";
+    }
+    return h`
+      ${reference ? h`<p class="file-ref">${reference}</p>` : ""}
+      ${because.length ? h`<div class="prose small soft">${
+        because.map(function (line) { return h`<p>${line}</p>`; })
+      }</div>` : ""}
+      ${rows.length ? h`
+        <div class="table-wrap"><table class="grid">
+          <thead><tr><th></th><th>${source.ours_label || ""}</th><th>${
+            source.theirs_label || ""
+          }</th><th></th></tr></thead>
+          <tbody>${rows.map(function (line) {
+            return h`<tr>
+              <td>${line.what}</td><td class="num">${line.ours}</td>
+              <td class="num">${line.theirs}</td>
+              <td><span class="dot" data-tone="${
+                line.tone === "differs" ? "stop"
+                  : line.tone === "same" ? "good" : "later"
+              }"></span> ${line.says}</td>
+            </tr>`;
+          })}</tbody>
+        </table></div>` : ""}
+      ${source.corroboration ? h`<p class="note">${source.corroboration}</p>` : ""}
+      ${moments.length ? h`
+        <p class="eyebrow">${source.timeline_heading || ""}</p>
+        <ul class="timeline">${moments.map(function (moment) {
+          return h`<li>
+            <div class="when">${moment.when}</div>
+            <div>${cleanSentence(moment.what)}</div>
+          </li>`;
+        })}</ul>` : ""}`;
+  }
+
+  /* One clause, out of whichever shape it arrived in.
+
+     Two routes carry the same rule and disagree about the field names. The
+     onboarding record sends the register's own row -- the regulator's
+     verbatim extract, the edition it was read from, the page. A file sends
+     the rule as briefing.py restates it in plain words, with the extract
+     beside it and its own caution about who has checked it. Both are folded
+     into one shape here so a clause is shown one way on every screen rather
+     than two half-ways: the file route used to keep the number and the
+     restatement and drop the regulator's own words, the page and the link
+     on the floor.
+
+     What arrives is the server's; the ordering is this file's. */
+  function citedClause(source, fromRegister) {
+    if (fromRegister) {
+      return {
+        clause: source.clause,
+        plain: shown(source.heading || ""),
+        quote: source.says || "",
+        document: source.document || "",
+        edition: source.edition || "",
+        page: source.page || "",
+        amended: source.amended || "",
+        url: source.url || "",
+        link_text: "",
+        verified: !!source.verified,
+        checked_on: source.checked_on || "",
+        caution: ""
+      };
+    }
+    return {
+      clause: source.clause,
+      plain: source.says || "",
+      quote: source.quote || "",
+      document: source.document || "",
+      edition: "", page: "", amended: "",
+      url: source.link || "",
+      link_text: source.link_text || "",
+      verified: !!source.checked_by_a_person,
+      checked_on: "",
+      caution: source.caution || ""
+    };
+  }
+
+  /* Every clause behind one finding -- once each, however many pieces of
+     evidence cited it. */
+  function clausesOf(finding, file) {
+    var cited = [];
+    ((finding && finding.clauses) || []).forEach(function (clause) {
+      if (typeof clause === "string") {
+        cited.push(citedClause({ clause: clause }, true));
+      } else if (clause && clause.clause) {
+        cited.push(citedClause(clause, true));
+      }
+    });
+    if (!cited.length && file && file.rules) {
+      (file.rules || []).forEach(function (rule) {
+        if (rule && rule.clause) { cited.push(citedClause(rule, false)); }
+      });
+    }
+    var seen = {}, only = [];
+    cited.forEach(function (one) {
+      if (seen[one.clause]) { return; }
+      seen[one.clause] = true;
+      only.push(one);
+    });
+    return only;
+  }
+
+  /* Whether this rests on one rule or several. Both words are the server's;
+     this only counts. */
+  function rulesHeading(finding, file) {
+    return clausesOf(finding, file).length > 1
+      ? word("rules_heading", "") : word("rule_heading", "");
+  }
+
   function clauseTags(finding, file) {
     // "Clause 5.4.2" and nothing else is the shape of an answer nobody can
     // check. The officer cannot tell whether the rule says what we claim it
@@ -1291,71 +1513,77 @@
     // number alone is a citation in the way a footnote with no book is a
     // citation. The register holds the regulator's own sentence, the edition
     // it was read from, the page and the link. All of it goes on the screen,
-    // folded away until asked for.
-    var cited = [];
-    (finding.clauses || []).forEach(function (clause) {
-      if (typeof clause === "string") { cited.push({ clause: clause }); }
-      else if (clause && clause.clause) { cited.push(clause); }
-    });
-    if (!cited.length && file && file.rules) {
-      file.rules.forEach(function (rule) {
-        if (rule.clause) { cited.push({ clause: rule.clause, says: rule.says }); }
-      });
-    }
-    if (!cited.length) { return ""; }
+    // folded away until asked for: this is why a file matters, and it is the
+    // part an officer opens only when somebody challenges them.
+    var only = clausesOf(finding, file);
+    if (!only.length) { return ""; }
 
-    // One entry per clause, however many pieces of evidence cited it.
-    var seen = {}, only = [];
-    cited.forEach(function (one) {
-      if (seen[one.clause]) { return; }
-      seen[one.clause] = true;
-      only.push(one);
-    });
-
-    return h`<div class="clauses">${only.map(function (one) {
-      if (!one.says) {
-        return h`<span class="clause">${word("clause_prefix", "")} ${one.clause}</span>`;
+    return h`<ul class="clauses">${only.map(function (one) {
+      var where = [
+        one.document,
+        one.edition,
+        one.page ? "page " + one.page : ""
+      ].filter(Boolean).join(" · ");
+      var named = h`<span class="clause">${word("clause_prefix", "")} ${
+        one.clause
+      }</span>${one.plain ? h`<span class="clause-plain">${one.plain}</span>` : ""}`;
+      if (!one.quote && !where && !one.url && !one.amended && one.verified) {
+        return h`<li>${named}</li>`;
       }
-      return h`<details class="clause-source">
-        <summary><span class="clause">${word("clause_prefix", "")} ${
-          one.clause
-        }</span>${one.heading ? h`<span class="clause-heading">${one.heading}</span>` : ""}</summary>
-        <blockquote class="clause-says">${one.says}</blockquote>
+      return h`<li><details class="clause-source">
+        <summary>${named}</summary>
+        ${one.quote ? h`<blockquote class="clause-says">${one.quote}</blockquote>` : ""}
         ${one.amended ? h`<p class="clause-note">${one.amended}</p>` : ""}
-        <p class="clause-where">${[
-          one.document,
-          one.edition,
-          one.page ? "page " + one.page : ""
-        ].filter(Boolean).join(" · ")}</p>
+        ${where ? h`<p class="clause-where">${where}</p>` : ""}
         ${one.url ? h`<p class="clause-where"><a href="${
           one.url
-        }" rel="noreferrer noopener" target="_blank">Read it at the source</a></p>` : ""}
-        ${one.verified
-          ? ""
-          : h`<p class="clause-unverified">Quoted from the published document
-              and checked against it${
-                one.checked_on ? " on " + one.checked_on : ""
-              }. No qualified person has confirmed that this is the right rule
-              to be citing here.</p>`}
-      </details>`;
-    })}</div>`;
+        }" rel="noreferrer noopener" target="_blank">${
+          one.link_text || word("read_clause", "")
+        }</a></p>` : ""}
+        ${one.verified ? "" : h`<p class="clause-unverified">${
+          one.caution || unverifiedCaution(one.checked_on)
+        }</p>`}
+      </details></li>`;
+    })}</ul>`;
   }
 
-  function ownerChain(ownership) {
-    var owners = ((ownership && ownership.owners) || []).map(function (owner) {
-      if (typeof owner === "string") { return { who: shown(owner), share: "", note: "" }; }
+  /* One decimal at most, and no trailing nought. The server rounded the
+     arithmetic; this only decides how it is spelt. */
+  function oneDecimal(value) {
+    var rounded = Math.round(Number(value) * 10) / 10;
+    return isFinite(rounded) ? String(rounded) : "";
+  }
+
+  /* The owners the server sent, in the one shape both the drawing and the
+     list below it read. Nothing is computed here: `percentage` is the share
+     the walk found reaching that person, already rounded. */
+  function ownerRows(ownership) {
+    return ((ownership && ownership.owners) || []).map(function (owner) {
+      if (typeof owner === "string") {
+        return { who: shown(owner), share: "", note: "", percent: null };
+      }
+      var percent = (typeof owner.percentage === "number" &&
+                     isFinite(owner.percentage)) ? owner.percentage : null;
       var share = owner.share || owner.stake || owner.holding || "";
-      if (!share && typeof owner.percentage === "number") {
+      if (!share && percent !== null) {
         /* A figure the server computed, given the sign it is measured in.
            Formatting a number is not the same as writing a sentence. */
-        share = owner.percentage + "%";
+        share = oneDecimal(percent) + "%";
       }
       return {
         who: shown(owner.name || owner.who || ""),
         share: shown(share),
-        note: shown(owner.basis || owner.through || owner.says || "")
+        note: shown(owner.basis || owner.through || owner.says || ""),
+        percent: percent
       };
     }).filter(function (owner) { return owner.who; });
+  }
+
+  /* The same owners as words, under the drawing. This is the fallback for a
+     reader who cannot see the picture, and it is left visible rather than
+     folded away: it also carries the figures in a form that can be copied. */
+  function ownerChain(ownership) {
+    var owners = ownerRows(ownership);
     if (!owners.length) { return ""; }
     return h`<ul class="chain">${owners.map(function (owner) {
       return h`<li>
@@ -1364,6 +1592,410 @@
                  ${owner.note ? h`<div class="chain-share">${owner.note}</div>` : ""}
                </li>`;
     })}</ul>`;
+  }
+
+  /* ---------- ownership, drawn ----------
+
+     Ownership reached this screen as a list of lines, and a list is the one
+     shape that hides the two things an officer is actually looking for: where
+     a holding chain turns back on itself, and where it stops before it
+     reaches a person. Both are drawn here, at the size of the thing they are
+     about, and neither is a footnote.
+
+     Only what the server sent is drawn. `owners` carries a name and the
+     percentage that reaches that person through the whole structure; the
+     companies in between are not on this route, so no company is drawn. A
+     tidy three-level tree assembled in the browser would be a picture of
+     something nobody established, which is the one thing this drawing must
+     not be. Where the walk did not finish, the drawing says so instead of
+     closing the gap.
+
+     Inline SVG, because the Content-Security-Policy this page is served
+     under admits this origin and nothing else: no chart library, no canvas,
+     no remote image. Geometry travels as attributes and every colour is a
+     class in app.css, because that same policy admits no inline style — and
+     a test asserts this file contains none. */
+
+  /* IFSCA clause 1.3.3, transcribed from IFSCA_TESTS in vinzor/graph.py.
+     Nothing is decided from it: it places one mark on a meter so that a
+     holding sitting just over the line can be told from one sitting just
+     under it. Where the kind of party is not one of these the mark is left
+     off rather than guessed.
+
+     1.3.3(a) says "more than ten per cent"; 1.3.3(d) says "ten per cent or
+     more". The difference is in the regulator's text, so it is on the
+     drawing. The wording goes through word() so briefing.py can take it
+     over without this file changing. */
+  var OWNERSHIP_TESTS = {
+    COMPANY: { line: 10, orMore: false, clause: "1.3.3(a)" },
+    FUND: { line: 10, orMore: false, clause: "1.3.3(a)" },
+    PARTNERSHIP: { line: 10, orMore: false, clause: "1.3.3(b)" },
+    UNINCORPORATED_BODY: { line: 15, orMore: false, clause: "1.3.3(c)" },
+    TRUST: { line: 10, orMore: true, clause: "1.3.3(d)" }
+  };
+
+  /* Two routes spell the kind of party two ways — the value the records are
+     keyed by on one, the word a person says on the other. Neither is printed
+     from here; both have to find the same test. */
+  function testFor(kind) {
+    var key = String(kind || "").trim().toUpperCase().replace(/\s+/g, "_");
+    return OWNERSHIP_TESTS[key] || null;
+  }
+
+  function thresholdWords(test) {
+    var phrase = test.orMore
+      ? word("ownership_test_or_more", "{n}% or more")
+      : word("ownership_test_above", "more than {n}%");
+    return word("ownership_test_lead", "Beneficial owner") + ": " +
+           phrase.replace("{n}", oneDecimal(test.line)) + " · " +
+           word("clause_prefix", "Clause") + " " + test.clause;
+  }
+
+  /* What to write on a branch that never arrives at a person. Which of the
+     three it is, is the server's answer, read straight off the conclusion —
+     this only chooses which label to hang on the mark. */
+  function looseLabel(conclusion) {
+    if (conclusion === "NOT_DECLARED") {
+      return word("ownership_not_declared", "No ownership declared");
+    }
+    if (conclusion === "SENIOR_MANAGING_OFFICIAL_REQUIRED") {
+      return word("ownership_none_meet", "Nobody meets the test");
+    }
+    return word("ownership_unfinished", "Stops before a person");
+  }
+
+  /* SVG text does not wrap and there is no way to measure a glyph before it
+     is laid out, so this estimates: the system sans this page uses averages
+     about 0.55 of its size per character. A name is only ever cut on the
+     drawing — the whole of it is on the node as a tooltip, in the list under
+     the drawing, and in the heading above it. */
+  function fitLines(text, width, size, allowed) {
+    var per = Math.max(4, Math.floor(width / (size * 0.55)));
+    var words = String(text == null ? "" : text).split(/\s+/).filter(Boolean);
+    var out = [], line = "";
+    words.forEach(function (piece) {
+      var next = line ? line + " " + piece : piece;
+      if (!line || next.length <= per) { line = next; return; }
+      out.push(line);
+      line = piece;
+    });
+    if (line) { out.push(line); }
+    if (out.length > allowed) {
+      out = out.slice(0, allowed);
+      out[allowed - 1] = out[allowed - 1] + "…";
+    }
+    return out.map(function (one) {
+      return one.length > per ? one.slice(0, Math.max(1, per - 1)) + "…" : one;
+    });
+  }
+
+  /* Every measurement on the drawing, in the units of its own viewBox. The
+     box is 880 wide whatever the window is: the browser scales it to the
+     column, so one set of numbers serves a 1440-wide screen and a sheet of
+     A4 alike. Four to a row, and an even number on purpose — the spine runs
+     down the middle of the box and would otherwise have to cross a node to
+     reach the row below. */
+  var TREE = {
+    width: 880, gutter: 16, perRow: 4,
+    nodeWidth: 190, nodeGap: 22, nodeHeight: 104, rowGap: 30,
+    partyWidth: 470, partyHeight: 62,
+    top: 12, trunk: 42, drop: 30, foot: 66
+  };
+
+  var TREE_COUNT = 0;
+
+  function ownershipTree(ownership, party, note) {
+    if (!ownership) { return ""; }
+
+    var T = TREE;
+    var people = ownerRows(ownership);
+    var loops = ((ownership.cycles) || []).length;
+    var conclusion = String(ownership.conclusion || "").toUpperCase();
+    var resolved = conclusion === "IDENTIFIED";
+    var test = testFor(party && party.kind);
+
+    /* A loop is drawn as a loop, once per circle the walk came back with.
+       The references it names are machine addresses and are never printed;
+       the shape is the finding, and the sentence under the drawing is the
+       product's own. */
+    var items = [], i;
+    for (i = 0; i < Math.min(loops, 3); i++) {
+      items.push({ mark: "loop", label: word("ownership_loops", "Ownership loops back") });
+    }
+    if (!resolved && !loops && conclusion) {
+      items.push({ mark: "loose", label: looseLabel(conclusion), open: true });
+    }
+    people.forEach(function (owner) { items.push({ owner: owner }); });
+    if (!items.length) { return ""; }
+
+    var mid = T.width / 2;
+    var partyLeft = mid - T.partyWidth / 2;
+    var partyBottom = T.top + T.partyHeight;
+
+    var rows = [];
+    for (i = 0; i < items.length; i += T.perRow) {
+      rows.push(items.slice(i, i + T.perRow));
+    }
+    var band = T.drop + T.nodeHeight + T.rowGap;
+    var firstBus = partyBottom + T.trunk;
+    var lastBus = firstBus + (rows.length - 1) * band;
+    /* Whether anything on this drawing carries a figure decides how much
+       foot it needs: two lines of key where there are meters to read, one
+       where there are not. */
+    var measured = items.some(function (item) {
+      return item.owner && item.owner.percent !== null;
+    });
+    var lastNodeBottom = lastBus + T.drop + T.nodeHeight;
+    var height = lastNodeBottom + (measured ? T.foot : T.foot - 26);
+
+    var ink = [], returns = [];
+    function put(markup) { ink.push(raw(markup)); }
+    function n(value) { return Math.round(value * 10) / 10; }
+    function box(cls, x, y, w, hgt, r) {
+      return '<rect class="' + cls + '" x="' + n(x) + '" y="' + n(y) +
+             '" width="' + n(w) + '" height="' + n(hgt) + '" rx="' + r + '"/>';
+    }
+
+    /* the spine, and one bus per row */
+    put('<path class="tree-edge" d="M ' + n(mid) + ' ' + n(partyBottom) +
+        ' V ' + n(lastBus) + '"/>');
+
+    rows.forEach(function (row, r) {
+      var busY = firstBus + r * band;
+      var topY = busY + T.drop;
+      var span = row.length * T.nodeWidth + (row.length - 1) * T.nodeGap;
+      var left = mid - span / 2;
+
+      if (row.length > 1) {
+        put('<path class="tree-edge" d="M ' + n(left + T.nodeWidth / 2) + ' ' +
+            n(busY) + ' H ' + n(left + span - T.nodeWidth / 2) + '"/>');
+      }
+
+      row.forEach(function (item, c) {
+        var nx = left + c * (T.nodeWidth + T.nodeGap);
+        var centre = nx + T.nodeWidth / 2;
+
+        put('<path class="tree-edge' + (item.open ? " tree-edge-open" : "") +
+            '" d="M ' + n(centre) + ' ' + n(busY) + ' V ' + n(topY) + '"/>');
+
+        /* the percentage rides the edge it belongs to, not the node */
+        if (item.owner && item.owner.percent !== null) {
+          var said = oneDecimal(item.owner.percent) + "%";
+          var wide = 16 + said.length * 7.4;
+          put(box("tree-pill", centre - wide / 2, busY + T.drop / 2 - 9, wide, 18, 9));
+          ink.push(h`<text class="tree-pill-text" x="${n(centre)}" y="${
+            n(busY + T.drop / 2 + 4)
+          }" text-anchor="middle">${said}</text>`);
+        }
+
+        if (item.owner) {
+          ink.push(personNode(nx, topY, item.owner, test, n, box));
+        } else {
+          ink.push(markNode(nx, topY, item, n, box));
+          /* The grommet where an open branch meets its node, drawn after the
+             node so it sits on the edge rather than under it. */
+          if (item.open) {
+            put('<circle class="tree-open-end" cx="' + n(centre) + '" cy="' +
+                n(topY) + '" r="4.5"/>');
+          }
+          if (item.mark === "loop") {
+            returns.push({ x: nx, y: topY + T.nodeHeight / 2,
+                           under: topY + T.nodeHeight });
+          }
+        }
+      });
+    });
+
+    /* the party, drawn over the spine that leaves it */
+    ink.push(h`<g class="tree-node tree-party">
+      <title>${(party && party.name) || ""}</title>
+      ${raw(box("tree-box tree-box-party", partyLeft, T.top,
+                T.partyWidth, T.partyHeight, 10))}
+      <text class="tree-party-name" x="${n(mid)}" y="${n(T.top + 31)}"
+            text-anchor="middle">${
+              fitLines(party && party.name, T.partyWidth - 44, 17, 1)[0] || ""
+            }</text>
+      <text class="tree-party-kind" x="${n(mid)}" y="${n(T.top + 49)}"
+            text-anchor="middle">${kindWord(party && party.kind)}</text>
+    </g>`);
+
+    /* and the arrow that makes a circle a circle: out of the marked node,
+       down the left gutter and back into the party it started from */
+    returns.forEach(function (from, k) {
+      var lane = T.gutter + k * 13;
+      var toY = T.top + T.partyHeight / 2 + (k - (returns.length - 1) / 2) * 10;
+      /* The first circle leaves from the side of its node, which is the
+         leftmost thing in its row, so the curve crosses nothing. A second
+         one has the first sitting between it and the gutter, so it leaves
+         from underneath and runs home along the gap below the row rather
+         than straight through a node that is not part of it. */
+      var start = k === 0
+        ? 'M ' + n(from.x) + ' ' + n(from.y)
+        : 'M ' + n(from.x + T.nodeWidth / 2) + ' ' + n(from.under) +
+          ' V ' + n(from.under + 14 + k * 6);
+      var leaveY = k === 0 ? from.y : from.under + 14 + k * 6;
+      put('<path class="tree-return" d="' + start +
+          ' C ' + n(lane) + ' ' + n(leaveY) + ' ' + n(lane) + ' ' + n(toY) +
+          ' ' + n(partyLeft - 11) + ' ' + n(toY) + '"/>');
+      put('<path class="tree-return-head" d="M ' + n(partyLeft) + ' ' + n(toY) +
+          ' L ' + n(partyLeft - 12) + ' ' + n(toY - 5.5) +
+          ' L ' + n(partyLeft - 12) + ' ' + n(toY + 5.5) + ' Z"/>');
+    });
+
+    /* The foot reads every meter above it: the scale it is drawn on at each
+       end, the regulator's line where the mark falls, and what the figures
+       are shares of. A key, not a sentence about this party. */
+    var footY = lastNodeBottom + 28;
+    var sentenceX = 28;
+    if (test && measured) {
+      /* The key only where there is a meter to read with it. On a drawing
+         with no figures on it — a chain that only loops — a scale from
+         nothing to twice the line is a legend for something that is not
+         there. The test itself still gets said: it is what could not be
+         applied. */
+      var topOfScale = oneDecimal(test.line * 2) + "%";
+      var keyX = 38, keyW = 88;
+      ink.push(h`<text class="tree-foot tree-foot-note" x="28" y="${n(footY + 3)}"
+                       text-anchor="start">0</text>`);
+      put(box("tree-meter-track", keyX, footY - 4, keyW, 8, 4));
+      put(box("tree-meter-halo", keyX + keyW / 2 - 3, footY - 9, 6, 18, 2));
+      put(box("tree-meter-tick", keyX + keyW / 2 - 1, footY - 8, 2, 16, 1));
+      ink.push(h`<text class="tree-foot tree-foot-note" x="${n(keyX + keyW + 6)}"
+                       y="${n(footY + 3)}" text-anchor="start">${topOfScale}</text>`);
+      sentenceX = keyX + keyW + 16 + topOfScale.length * 6.8;
+    }
+    if (test) {
+      ink.push(h`<text class="tree-foot" x="${n(sentenceX)}" y="${n(footY + 3)}"
+                       text-anchor="start">${thresholdWords(test)}</text>`);
+    }
+    if (measured) {
+      ink.push(h`<text class="tree-foot tree-foot-note" x="28" y="${n(footY + 26)}"
+                       text-anchor="start">${
+        word("ownership_reach_note",
+             "Each figure is the share that reaches that person through the " +
+             "whole of the structure on record.")
+      }</text>`);
+    }
+
+    var id = "tree" + (++TREE_COUNT);
+    var spoken = items.map(function (item) {
+      if (!item.owner) { return item.label; }
+      return item.owner.percent === null
+        ? item.owner.who
+        : item.owner.who + " " + oneDecimal(item.owner.percent) + "%";
+    }).join("; ");
+
+    return h`<figure class="tree">
+      <svg class="tree-svg" viewBox="0 0 ${n(T.width)} ${n(height)}"
+           role="img" aria-labelledby="${id}-t ${id}-d" focusable="false"
+           preserveAspectRatio="xMidYMid meet">
+        <title id="${id}-t">${word("report_ownership", "Who is behind this party")}${
+          (party && party.name) ? " — " + party.name : ""
+        }</title>
+        <desc id="${id}-d">${spoken}</desc>
+        ${ink}
+      </svg>
+      ${note ? h`<figcaption class="tree-note prose">${note}</figcaption>` : ""}
+    </figure>`;
+  }
+
+  /* The meter under each name, and the one decision in this drawing worth
+     arguing about: it does not run from nothing to everything.
+
+     Drawn 0–100%, the regulator's line lands an eighth of the way along and
+     a holding of 10.4% ends four tenths of a millimetre past it — which is
+     to say the two states this whole test distinguishes look identical, and
+     10.4% and 9.6% look identical to each other. The line is where the
+     reading happens, so the scale is built around it: nothing to twice the
+     line, with the line itself dead centre of every meter on the page. A
+     holding past the top of that scale fills the meter and is marked as
+     running off the end, which is the true thing to say about it — that it
+     is well clear — and the exact figure is set above it in full anyway.
+
+     Below the line is where an eighth of a point decides the answer, and no
+     bar of any scale reads that finely. That is the number's job, and it is
+     the largest thing on the node. */
+  function meterOf(owner, test, nx, my, n, box) {
+    if (owner.percent === null || !test) { return ""; }
+    var mx = nx + 18, mw = TREE.nodeWidth - 44;
+    var top = test.line * 2;
+    var share = Number(owner.percent);
+    var meter = box("tree-meter-track", mx, my, mw, 8, 4) +
+                box("tree-meter-fill", mx, my,
+                    mw * Math.max(0, Math.min(1, share / top)), 8, 4) +
+                box("tree-meter-halo", mx + mw / 2 - 3, my - 5, 6, 18, 2) +
+                box("tree-meter-tick", mx + mw / 2 - 1, my - 4, 2, 16, 1);
+    if (share > top) {
+      meter += '<path class="tree-meter-over" d="M ' + n(mx + mw + 5) + ' ' +
+               n(my) + ' L ' + n(mx + mw + 12) + ' ' + n(my + 4) + ' L ' +
+               n(mx + mw + 5) + ' ' + n(my + 8) + ' Z"/>';
+    }
+    return meter;
+  }
+
+  /* One natural person: the name, the share that reaches them, and the
+     meter, with the regulator's line marked on it. */
+  function personNode(nx, ny, owner, test, n, box) {
+    var T = TREE;
+    var meter = meterOf(owner, test, nx, ny + 78, n, box);
+    return h`<g class="tree-node tree-person">
+      <title>${owner.who}</title>
+      ${raw(box("tree-box", nx, ny, T.nodeWidth, T.nodeHeight, 9))}
+      ${fitLines(owner.who, T.nodeWidth - 24, 14, 2).map(function (line, k) {
+        return h`<text class="tree-name" x="${n(nx + T.nodeWidth / 2)}" y="${
+          n(ny + 24 + k * 17)
+        }" text-anchor="middle">${line}</text>`;
+      })}
+      ${owner.percent === null ? "" : h`<text class="tree-pct" x="${
+        n(nx + T.nodeWidth / 2)
+      }" y="${n(ny + 68)}" text-anchor="middle">${
+        oneDecimal(owner.percent) + "%"
+      }</text>`}
+      ${raw(meter)}
+    </g>`;
+  }
+
+  /* A branch that does not arrive: the circle drawn as a circle, or the open
+     end drawn as an end. Both are marked in the colour the rest of the
+     product uses for "this is the thing to look at". */
+  function markNode(nx, ny, item, n, box) {
+    var T = TREE;
+    var gx = nx + T.nodeWidth / 2, gy = ny + 34;
+    var glyph = item.mark === "loop"
+      ? '<g class="tree-glyph-loop" transform="translate(' + n(gx) + ' ' +
+        n(gy) + ')"><path class="tree-ring" d="M 4.5 -7.8 A 9 9 0 1 1 -4.5 -7.8"/>' +
+        '<path class="tree-ring-head" d="M 0.3 -10.5 L -2.9 -5 L -6.1 -10.6 Z"/></g>'
+      : '<g class="tree-glyph-open" transform="translate(' + n(gx) + ' ' +
+        n(gy) + ')"><circle cx="-12" cy="0" r="2.8"/><circle cx="0" cy="0" r="2.8"/>' +
+        '<circle cx="12" cy="0" r="2.8"/></g>';
+    return h`<g class="tree-node tree-${item.mark}">
+      <title>${item.label}</title>
+      ${raw(box("tree-box", nx, ny, T.nodeWidth, T.nodeHeight, 9))}
+      ${raw(glyph)}
+      ${fitLines(item.label, T.nodeWidth - 20, 13, 2).map(function (line, k) {
+        return h`<text class="tree-label" x="${n(nx + T.nodeWidth / 2)}" y="${
+          n(ny + 66 + k * 17)
+        }" text-anchor="middle">${line}</text>`;
+      })}
+    </g>`;
+  }
+
+  /* The sentence that goes under the drawing where the structure could not be
+     resolved. Not written here: `explains` names the party by the reference
+     the records are keyed by and so rarely survives the guard, and the file
+     opened on the ownership finding says the same thing in words already
+     written for a reader. Whichever is used is rendered whole. */
+  function ownershipNote(record, files) {
+    if (ownershipSaid(record && record.ownership)) { return ""; }
+    var found = "";
+    ((record && record.findings) || []).forEach(function (finding, index) {
+      if (found) { return; }
+      if (String(finding.case_type || "").toUpperCase().indexOf("UBO") < 0) { return; }
+      var file = (files || [])[index];
+      if (!file) { return; }
+      found = cleanSentence(file.headline) || cleanLines(file.because)[0] || "";
+    });
+    return found;
   }
 
   /* One judgement, recorded against every open file it settles. The contract
@@ -1407,6 +2039,465 @@
       code: code || "",
       reason_code: code || "",
       used: "NONE"
+    });
+  }
+
+  /* ---------- the file that leaves the building ---------- */
+
+  /* An officer is not asked for a screen. They are asked for the file — by
+     their own board, by a bank doing correspondent diligence, by an
+     inspector reading it eighteen months from now. So the report is built
+     here into one HTML document the browser saves: its styling travels
+     inside it, it fetches nothing, and it opens on a machine that has never
+     heard of this product.
+
+     Built in the browser on purpose. No route is added — nothing about an
+     investor is sent anywhere in order to produce a document out of
+     sentences the server has already said — and nothing is added to a
+     product whose core is standard library only.
+
+     The order, the warning at the top and the seal at the bottom are
+     dossier.py's, not this file's. Two of its decisions are carried over
+     deliberately:
+
+     * **The warning comes first, and in black on white.** A caution that
+       exists only as a pale tint is the first thing a photocopier throws
+       away, and this document's whole danger is that it travels.
+     * **There is no shortened version.** dossier.py argues it at length: a
+       redacted file would look safe to hand to the customer and would not
+       be, because the disclosure is that the document exists at all. */
+
+  var DOC_CSS = `
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: #fff; color: #000;
+  font: 13.5px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+}
+.doc { max-width: 186mm; margin: 0 auto; padding: 24px 20px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; line-height: 1.25; }
+h2 { font-size: 12.5px; margin: 0 0 10px; letter-spacing: .07em;
+     text-transform: uppercase; border-bottom: 1.5px solid #000;
+     padding-bottom: 5px; }
+h3 { font-size: 14.5px; margin: 0 0 7px; }
+p { margin: 0 0 8px; }
+.meta { color: #333; font-size: 12.5px; margin: 0; }
+.lede { margin: 0 0 14px; }
+.aside { color: #333; font-size: 12.5px; }
+.eyebrow { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase;
+           color: #444; margin: 10px 0 3px; font-weight: 700; }
+section { margin: 0 0 24px; }
+h2, h3, .eyebrow { page-break-after: avoid; break-after: avoid; }
+
+/* The warning. Black ink on white paper, a rule you can feel, and no tint
+   anywhere: this is the one thing on the page that must survive a fax. */
+.banner { border: 2.5px solid #000; padding: 13px 15px; margin: 0 0 22px;
+          background: #fff; color: #000; }
+.banner h2 { border-bottom: 0; padding-bottom: 0; margin-bottom: 6px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px;
+        margin: 0 0 8px; }
+th { text-align: left; border-bottom: 1.5px solid #000; padding: 0 10px 6px 0;
+     font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; }
+td { border-bottom: 1px solid #bbb; padding: 7px 10px 7px 0;
+     vertical-align: top; }
+tr { page-break-inside: avoid; break-inside: avoid; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+ul { margin: 0 0 8px; padding-left: 18px; }
+li { margin-bottom: 4px; }
+ul.plain, ul.timeline { list-style: none; padding: 0; }
+ul.plain > li, ul.timeline > li { border-bottom: 1px solid #ddd;
+                                  padding: 8px 0; margin: 0; }
+ul.plain > li:last-child, ul.timeline > li:last-child { border-bottom: 0; }
+.when { font-size: 11.5px; color: #333; }
+.file-ref { font-size: 12px; color: #333; }
+/* A coloured dot says nothing on paper. The sentence beside it does. */
+.dot { display: none; }
+
+.finding { border: 1px solid #000; border-left-width: 5px; padding: 13px 15px;
+           margin: 0 0 12px; page-break-inside: avoid; break-inside: avoid; }
+.finding .eyebrow:first-child { margin-top: 0; }
+.clause-block { margin: 10px 0 0; padding-top: 9px; border-top: 1px dashed #888;
+                page-break-inside: avoid; break-inside: avoid; }
+blockquote { margin: 7px 0; padding: 8px 13px; border-left: 3px solid #000;
+             background: #f2f2f2; font-size: 12.5px; }
+.where { font-size: 11.5px; color: #333; margin: 3px 0 0;
+         word-break: break-word; }
+.caution { font-size: 11.5px; line-height: 1.5; margin: 8px 0 0;
+           padding: 7px 9px; border: 1px solid #000; }
+.note { border-left: 2px solid #000; padding-left: 11px; font-size: 12.5px; }
+dl.pairs { display: grid; grid-template-columns: minmax(120px, 45%) 1fr;
+           gap: 5px 16px; font-size: 12.5px; margin: 0; }
+dl.pairs dt { color: #333; }
+dl.pairs dd { margin: 0; }
+.foot { margin-top: 28px; }
+a { color: #000; }
+
+/* Ctrl-P, and nothing else to do. A4 with printer margins, no navigation to
+   strip out because the file has none, and the quoted clause loses its grey
+   so a mono printer does not return it as a smudge. */
+@page { size: A4; margin: 15mm 14mm; }
+@media print {
+  body { font-size: 10.5pt; }
+  .doc { max-width: none; padding: 0; }
+  blockquote { background: transparent; border-left-width: 2px; }
+  a { text-decoration: none; }
+}
+`;
+
+  /* Which published document the words were read out of, and where in it.
+     Composition, not wording: every piece is the register's own. */
+  function clauseWhere(one) {
+    return [one.document, one.edition, one.page ? "page " + one.page : ""]
+      .filter(Boolean).join(" · ");
+  }
+
+  /* The one sentence in this file that is about the rules rather than about
+     furniture, said where the route sends no caution of its own: every
+     clause in the register was lifted out of the regulator's PDF by machine,
+     and no qualified person has signed it off. It is said against each
+     clause and once more at the foot of the document, so a reader who only
+     ever sees the printout still sees it.
+
+     TODO — the remedy is a key in briefing.py, where UNVERIFIED_CAUTION
+     already carries this warning for the queue. */
+  function unverifiedCaution(checkedOn) {
+    return "Quoted from the published document and checked against it" +
+      (checkedOn ? " on " + checkedOn : "") + ". No qualified person has " +
+      "confirmed that this is the right rule to be citing here.";
+  }
+
+  function anythingUnconfirmed(findings, files) {
+    var any = false;
+    (findings || []).forEach(function (finding, index) {
+      clausesOf(finding, (files || [])[index]).forEach(function (one) {
+        if (!one.verified) { any = true; }
+      });
+    });
+    return any;
+  }
+
+  /* A decision a person recorded, wherever the record keeps it. `tone` is a
+     machine hint the document never prints; it is how an entry somebody
+     wrote is told from an entry the rules wrote, without this file having to
+     match on English. */
+  function decisionEntries(parts) {
+    var settled = [];
+    (parts || []).forEach(function (part) {
+      (part.entries || []).forEach(function (entry) {
+        if (entry && entry.tone === "decision") { settled.push(entry); }
+      });
+    });
+    return settled;
+  }
+
+  /* The watchlist history, for a party nobody has run the checks over from
+     this screen. The report's own table covers a run; this covers the rest
+     of the record, so a document downloaded from the party record does not
+     say "nothing has been run" over a party that has been screened for
+     years. Found by the clause every one of its lines answers to — a number
+     out of the guidelines, which is stable in a way a heading is not. */
+  function screeningPart(parts) {
+    var found = null;
+    (parts || []).forEach(function (part) {
+      var entries = part.entries || [];
+      if (!entries.length) { return; }
+      if (found) { return; }
+      if (entries.every(function (entry) { return entry.clause === "5.9"; })) {
+        found = part;
+      }
+    });
+    return found;
+  }
+
+  /* Every heading this report puts on a section, in one place, so the screen
+     and the file downloaded off it cannot name the same section two
+     different ways. Each prefers the server's word; the fallback is
+     furniture — the name of a section or a column — and never a sentence
+     about a finding, a rule or a risk. */
+  function reportWords() {
+    return {
+      checked: word("report_checked", "What was checked, and against what"),
+      checked_none: word("report_checked_none",
+                         "Nothing has been run for this party yet."),
+      col_check: word("report_col_check", "Check"),
+      col_result: word("report_col_result", "What it found"),
+      outstanding: word("report_outstanding", "What is still outstanding"),
+      owed_none: word("onboard_owed_none", "Nothing further is outstanding."),
+      not_modelled: word("onboard_not_modelled", "Not checked here"),
+      findings: word("report_findings", "What was found"),
+      findings_none: word("report_findings_none", "—"),
+      ownership: word("report_ownership", "Who is behind this party"),
+      ownership_none: word("report_ownership_none",
+                           "Nothing about ownership is on the record."),
+      decision: word("report_decision", "What only a person may now do"),
+      download: word("report_download", "Download the report")
+    };
+  }
+
+  /* The name the file lands under. Only the characters an operating system
+     refuses are taken out — a name in any script survives, which a
+     conservative filter would not have. */
+  function fileNameFor(doc, record) {
+    var party = (record && record.party) || {};
+    var name = String(party.name || (doc && doc.title) || "").trim();
+    var clean = name.replace(/[\\\/:*?"<>|]/g, " ")
+                    .replace(/\s+/g, " ").trim().slice(0, 80);
+    var now = new Date();
+    var day = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 10);
+    return "Vinzor report - " + clean + " - " + day + ".html";
+  }
+
+  /* The document itself: one string, and every sentence in it the server's.
+
+     `doc` is the party's permanent record out of dossier.py and is required.
+     It carries the warning about who may read this, and a report without
+     that warning on it is precisely the artefact dossier.py refuses to
+     produce — so where the record could not be read there is no download at
+     all, and the officer is told rather than handed a file that is missing
+     the only line on it that governs who may see it. */
+  function documentFor(doc, record, files, run) {
+    if (!doc || !doc.confidential) { throw new Error(""); }
+
+    var say = reportWords();
+    var party = (record && record.party) || {};
+    var checked = checkRows(record || {}, run);
+    var owed = (record && record.outstanding) || [];
+    var notModelled = (record && record.not_modelled) || [];
+    var findings = (record && record.findings) || [];
+    var ownership = (record && record.ownership) || {};
+    var owners = ownerRows(ownership);
+    var explains = ownershipSaid(ownership);
+    var cycles = cycleLines(ownership);
+    var parts = doc.parts || [];
+    var settled = decisionEntries(parts);
+    var screened = checked.rows.length ? null : screeningPart(parts);
+    var seal = parts.length ? parts[parts.length - 1] : null;
+    var title = doc.title || party.name || "";
+
+    var body = h`
+      <article class="doc">
+        <section class="banner">
+          <h2>${word("record_confidential", "")}</h2>
+          <p>${doc.confidential}</p>
+        </section>
+
+        <header class="lede">
+          <h1>${title}</h1>
+          <p class="meta">${
+            [doc.kind, doc.workspace, doc.printed].filter(Boolean).join(" · ")
+          }</p>
+        </header>
+
+        <section>
+          <h2>${say.checked}</h2>
+          ${checked.rows.length ? h`
+            <table>
+              <thead><tr>
+                <th>${say.col_check}</th>
+                <th>${checked.middle}</th>
+                <th>${say.col_result}</th>
+              </tr></thead>
+              <tbody>${checked.rows.map(function (row) {
+                return h`<tr>
+                  <td>${row.what}</td>
+                  <td>${row.middle}</td>
+                  <td>${row.said}${row.details.length ? h`<ul>${
+                    row.details.map(function (line) { return h`<li>${line}</li>`; })
+                  }</ul>` : ""}</td>
+                </tr>`;
+              })}</tbody>
+            </table>` : ""}
+          ${screened ? h`
+            <p class="lede">${screened.lead}</p>
+            <ul class="plain">${(screened.entries || []).map(function (entry) {
+              return h`<li>
+                <div class="when">${entry.when}</div>
+                <div>${entry.what}</div>
+                ${entry.clause ? h`<div class="aside">${
+                  word("clause_prefix", "")
+                } ${entry.clause}</div>` : ""}
+              </li>`;
+            })}</ul>
+            ${screened.tail ? h`<p class="aside">${screened.tail}</p>` : ""}` : ""}
+          ${(!checked.rows.length && !screened)
+            ? h`<p>${say.checked_none}</p>` : ""}
+        </section>
+
+        <section>
+          <h2>${say.outstanding}</h2>
+          ${owed.length ? h`<ul class="plain">${owed.map(function (item) {
+            var need = item.requirement || item;
+            return h`<li>
+              <div>${need.asks_for || ""}</div>
+              ${need.because ? h`<div class="aside">${need.because}</div>` : ""}
+              ${need.basis ? h`<div class="aside">${need.basis}</div>` : ""}
+            </li>`;
+          })}</ul>` : h`<p>${say.owed_none}</p>`}
+          ${notModelled.length ? h`
+            <p class="eyebrow">${say.not_modelled}</p>
+            <ul>${notModelled.map(function (line) {
+              return h`<li>${line}</li>`;
+            })}</ul>` : ""}
+        </section>
+
+        <section>
+          <h2>${say.findings}</h2>
+          ${findings.length ? findings.map(function (finding, index) {
+            var file = (files || [])[index];
+            var steps = (file && file.to_close_this) || [];
+            var detail = theDetail(file);
+            /* The same three questions the file answers on screen, in the
+               same order — what happened, why it matters, what to do — and
+               then everything the screen folds away, unfolded. Paper has no
+               fold, and the reader this is for is the one who asked to see
+               underneath it. */
+            return h`<article class="finding">
+              <p class="eyebrow">${word("what_happened", "What happened")}</p>
+              <h3>${
+                (file && file.headline) || cleanSentence(finding.summary) || ""
+              }</h3>
+
+              ${clausesOf(finding, file).length ? h`<p class="eyebrow">${
+                rulesHeading(finding, file)
+              }</p>` : ""}
+              ${clausesOf(finding, file).map(function (one) {
+                return h`<div class="clause-block">
+                  <p><strong>${word("clause_prefix", "")} ${one.clause}</strong>${
+                    one.plain ? " — " + one.plain : ""
+                  }</p>
+                  ${one.quote ? h`<blockquote>${one.quote}</blockquote>` : ""}
+                  ${clauseWhere(one) ? h`<p class="where">${
+                    clauseWhere(one)
+                  }</p>` : ""}
+                  ${one.amended ? h`<p class="where">${one.amended}</p>` : ""}
+                  ${one.url ? h`<p class="where"><a href="${one.url}">${
+                    one.url
+                  }</a></p>` : ""}
+                  ${one.verified ? "" : h`<p class="caution">${
+                    one.caution || unverifiedCaution(one.checked_on)
+                  }</p>`}
+                </div>`;
+              })}
+
+              ${steps.length ? h`
+                <p class="eyebrow">${word("to_close_heading", "")}</p>
+                <ul>${steps.map(function (line) {
+                  return h`<li>${line}</li>`;
+                })}</ul>` : ""}
+              ${detail ? h`
+                <p class="eyebrow">${word("the_detail", "The detail")}</p>
+                ${detail}` : ""}
+            </article>`;
+          }) : h`<p>${say.findings_none}</p>`}
+        </section>
+
+        <section>
+          <h2>${say.ownership}</h2>
+          ${explains ? h`<p>${explains}</p>` : ""}
+          ${owners.length ? h`<ul class="plain">${owners.map(function (owner) {
+            return h`<li>
+              <div>${owner.who}${owner.share ? " — " + owner.share : ""}</div>
+              ${owner.note ? h`<div class="aside">${owner.note}</div>` : ""}
+            </li>`;
+          })}</ul>` : ""}
+          ${cycles.length ? h`<ul>${cycles.map(function (line) {
+            return h`<li>${line}</li>`;
+          })}</ul>` : ""}
+          ${(!explains && !owners.length && !cycles.length)
+            ? h`<p>${say.ownership_none}</p>` : ""}
+          ${ownership && ownership.caveat ? h`<p class="note">${
+            ownership.caveat
+          }</p>` : ""}
+        </section>
+
+        ${settled.length ? h`
+          <section>
+            <h2>${word("decided_heading", "")}</h2>
+            <ul class="plain">${settled.map(function (entry) {
+              return h`<li>
+                <div class="when">${entry.when}</div>
+                <div>${entry.what}</div>
+                ${entry.who ? h`<div class="aside">${entry.who}</div>` : ""}
+                ${entry.why ? h`<blockquote>${entry.why}</blockquote>` : ""}
+              </li>`;
+            })}</ul>
+          </section>` : ""}
+
+        ${(seal && (seal.facts || []).length) ? h`
+          <section>
+            <h2>${seal.heading}</h2>
+            <p class="lede">${seal.lead}</p>
+            <dl class="pairs">${seal.facts.map(function (fact) {
+              return h`<dt>${fact.label}</dt><dd>${fact.value}${
+                fact.note ? " · " + fact.note : ""
+              }</dd>`;
+            })}</dl>
+            ${seal.tail ? h`<p class="where">${seal.tail}</p>` : ""}
+          </section>` : ""}
+
+        ${anythingUnconfirmed(findings, files)
+          ? h`<p class="caution foot">${unverifiedCaution("")}</p>` : ""}
+      </article>`;
+
+    return {
+      name: fileNameFor(doc, record),
+      html: "<!doctype html>\n<html lang=\"en\">\n<head>\n" +
+            "<meta charset=\"utf-8\">\n" +
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" +
+            "<title>" + esc(title) + "</title>\n<style>" + DOC_CSS +
+            "</style>\n</head>\n<body>\n" + flatten(body) + "\n</body>\n</html>\n"
+    };
+  }
+
+  /* The browser's own save, which is the only one there is: this page may
+     reach no origin but its own, and a compliance document has no business
+     travelling to a third party in order to become a file. */
+  function saveFile(name, html) {
+    var blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    var address = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = address;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    /* Freed on a later turn of the loop. Revoking it in the same tick
+       cancels the download in more than one browser. */
+    setTimeout(function () { URL.revokeObjectURL(address); }, 20000);
+  }
+
+  /* The action, wherever it sits. `gather` returns the document or a promise
+     of it, and is allowed to fail: a report whose permanent record could not
+     be read is not saved quietly without the warning that governs who may
+     read it. */
+  function downloadAction(where, gather) {
+    if (!where) { return; }
+    mount(where, h`
+      <button type="button" class="btn" data-download>${
+        word("report_download", "Download the report")
+      }</button>
+      <span class="problem" hidden></span>`);
+
+    var button = where.querySelector("[data-download]");
+    var problem = where.querySelector(".problem");
+    var label = button.textContent;
+
+    button.addEventListener("click", function () {
+      button.disabled = true;
+      problem.hidden = true;
+      button.textContent = word("agents_watching", label);
+      Promise.resolve().then(gather).then(function (file) {
+        saveFile(file.name, file.html);
+      }).catch(function (error) {
+        problem.hidden = false;
+        problem.textContent = said(error) || word("load_failed", "");
+      }).then(function () {
+        button.disabled = false;
+        button.textContent = label;
+      });
     });
   }
 
@@ -1564,6 +2655,22 @@
   }
 
   function groupCard(group) {
+    var items = group.items || [];
+    /* Whether these rows differ from one another at all.
+
+       A group is work that shares an explanation, so in most of them every
+       row is the same finding about a different party -- four payments, one
+       reason. Printing that reason on all four, under a heading that has
+       just said it, is four copies of a sentence and nothing that tells one
+       row from another. Where the rows are alike the second line says where
+       each one came from instead; where they are not -- the files grouped
+       only by how long they have waited -- it says what each is about,
+       which is the whole reason that group is hard to read.
+
+       Both sentences are the server's. The choice between them is furniture. */
+    var varied = items.some(function (item) {
+      return (item.headline || "") !== ((items[0] || {}).headline || "");
+    });
     return h`
       <div class="group">
         <div class="group-head">
@@ -1575,28 +2682,40 @@
           <span class="badge" data-tone="${group.tone}">${group.total}</span>
         </div>
         <div class="group-body">
-          ${(group.because || []).length ? h`<div class="prose small soft">${
-            group.because.map(function (line) { return h`<p>${line}</p>`; })
-          }</div>` : ""}
-          ${(group.to_close_this || []).length ? h`
-            <p class="tiny eyebrow">${word("to_close_heading", "")}</p>
-            <ul class="bullets small prose">${group.to_close_this.map(function (line) {
-              return h`<li>${line}</li>`;
-            })}</ul>` : ""}
           ${(group.rules || []).length ? h`
-            <p class="tiny eyebrow">${
-              group.rules.length === 1 ? word("rule_heading", "") : word("rules_heading", "")
-            }</p>
-            ${group.rules.map(function (rule) {
-              return h`<p class="quote">${word("clause_prefix", "")} ${rule.clause} — ${
-                rule.says
-              }</p>`;
-            })}` : ""}
+            <div class="group-why">
+              <p class="eyebrow">${rulesHeading(null, group)}</p>
+              ${clauseTags(null, group)}
+            </div>` : ""}
           <ul class="items">
             ${(group.items || []).map(function (item) {
+              /* The party first, then the one line that says what is wrong
+                 with them, then how urgent it is. It used to be one
+                 sentence -- "Yuki Ghosh — USD 1,222,462 received 31 May
+                 2026, reference TX-737609" -- which is a row you have to
+                 read rather than scan, and which never says what the file
+                 is actually about. The amount and the reference are still
+                 on the file, under the fold, where somebody looking a
+                 payment up in the bank portal will want them. */
+              var why = varied
+                ? (item.headline || shown(item.about))
+                : (shown(item.about) || item.headline);
+              /* The badge only where this row is more or less pressing than
+                 the group it sits in. Four identical badges under a heading
+                 that carries the same one is a wall of colour that says
+                 nothing; on the aged files, where every row was opened by a
+                 different rule, it is the only thing that ranks them. */
+              var urgency = (item.urgency && item.urgency !== group.urgency)
+                ? item.urgency : "";
               return h`<li data-file="${item.case_id}">
                 <div class="item-line">
-                  <span class="what">${item.line || item.headline}</span>
+                  <span class="item-what">
+                    <span class="item-who">${item.who || item.line || ""}</span>
+                    <span class="item-why">${why || ""}</span>
+                  </span>
+                  ${urgency ? h`<span class="badge" data-tone="${
+                    group.tone || "later"
+                  }">${urgency}</span>` : ""}
                   <button type="button" class="btn-link small" data-open>${
                     word("open_file", "")
                   }</button>
@@ -1606,6 +2725,20 @@
             })}
           </ul>
           ${group.more ? h`<p class="tiny faint">${group.more}</p>` : ""}
+          ${((group.because || []).length || (group.to_close_this || []).length) ? h`
+            <details class="fold">
+              <summary>${word("the_detail", "The detail")}</summary>
+              <div class="fold-body">
+                ${(group.because || []).length ? h`<div class="prose small soft">${
+                  group.because.map(function (line) { return h`<p>${line}</p>`; })
+                }</div>` : ""}
+                ${(group.to_close_this || []).length ? h`
+                  <p class="eyebrow">${word("to_close_heading", "")}</p>
+                  <ul class="bullets small prose">${group.to_close_this.map(function (line) {
+                    return h`<li>${line}</li>`;
+                  })}</ul>` : ""}
+              </div>
+            </details>` : ""}
         </div>
       </div>`;
   }
@@ -1623,35 +2756,16 @@
       }
       drawn = true;
       panel.hidden = false;
-      mount(panel, h`
-        <h3>${item.headline}</h3>
-        <div class="prose small soft">${(item.because || []).map(function (line) {
-          return h`<p>${line}</p>`;
-        })}</div>
-        ${(item.to_close_this || []).length ? h`
-          <p class="tiny eyebrow">${word("to_close_heading", "")}</p>
-          <ul class="bullets small prose">${item.to_close_this.map(function (line) {
-            return h`<li>${line}</li>`;
-          })}</ul>` : ""}
-        ${(item.side_by_side || []).length ? h`
-          <div class="table-wrap"><table class="grid">
-            <thead><tr><th></th><th>${item.ours_label}</th><th>${
-              item.theirs_label
-            }</th><th></th></tr></thead>
-            <tbody>${item.side_by_side.map(function (line) {
-              return h`<tr>
-                <td>${line.what}</td><td class="num">${line.ours}</td>
-                <td class="num">${line.theirs}</td>
-                <td><span class="dot" data-tone="${
-                  line.tone === "differs" ? "stop" : line.tone === "same" ? "good" : "later"
-                }"></span> ${line.says}</td>
-              </tr>`;
-            })}</tbody>
-          </table></div>` : ""}
-        ${item.corroboration ? h`<p class="note">${item.corroboration}</p>` : ""}
-        <div class="item-decision"></div>`);
+      mount(panel, fileBlock({
+        headline: item.headline || item.line || "",
+        rules_heading: rulesHeading(null, item),
+        clauses: clauseTags(null, item),
+        steps: item.to_close_this || [],
+        decides: true,
+        detail: theDetail(item)
+      }));
 
-      decisionBlock(panel.querySelector(".item-decision"), {
+      decisionBlock(panel.querySelector(".file-decision"), {
         heading: word("report_decision", "What only a person may now do"),
         permanence: item.recorded_as,
         options: (item.choices || []).map(function (choice) {
@@ -1715,7 +2829,21 @@
           <h1>${party.name || ""}</h1>
           <p class="soft prose">${party.standing || ""}</p>
           ${party.unknown ? h`<p class="note prose">${party.unknown}</p>` : ""}
+          <div class="take">
+            <a class="btn" href="#/record/${encodeURIComponent(entityId)}">${
+              word("open_record", "")
+            }</a>
+          </div>
         </div>
+
+        ${party.ownership ? h`
+          <div class="card pad tree-card">
+            <h2 class="section-head">${
+              word("report_ownership", "Who is behind this party")
+            }</h2>
+            ${ownershipTree(party.ownership,
+                            { name: party.name, kind: party.kind }, "")}
+          </div>` : ""}
 
         <div class="panels">
           ${(party.traits || []).length ? h`
@@ -1806,6 +2934,129 @@
     }).catch(function (error) { failed(where, error); });
   }
 
+  /* ---------- the party record ---------- */
+
+  /* dossier.py's document, on a screen. A screen is the wrong artefact for
+     the question this answers — *show me everything you have on this
+     investor* — which is why the download beside it exists, and why the two
+     are built from the same payload. Every sentence here is the server's,
+     including the warning at the top and the sentence under the seal; this
+     lays them out and does nothing else.
+
+     Reads only, and reachable by everybody including a viewer: this document
+     creates nothing and decides nothing, and a compliance function where
+     only two people can produce the file an inspector asked for is a
+     compliance function with a bottleneck. */
+  function recordScreen(entityId) {
+    var where = frame("parties");
+    busy(where);
+
+    var record = null;
+    var files = [];
+
+    get("/api/records/" + encodeURIComponent(entityId)).then(function (doc) {
+      absorb(doc);
+      if (doc.refusal) {
+        mount(where, h`<p class="note bad prose">${doc.refusal}</p>`);
+        return;
+      }
+
+      mount(where, h`
+        <div class="report">
+          <div class="card pad confidential">
+            <p class="eyebrow">${word("record_confidential", "")}</p>
+            <p class="prose">${doc.confidential}</p>
+          </div>
+
+          <div class="head">
+            <p class="eyebrow">${doc.kind || ""}</p>
+            <h1>${doc.title || ""}</h1>
+            <p class="small faint">${
+              [doc.workspace, doc.printed].filter(Boolean).join(" · ")
+            }</p>
+            <div class="take">
+              <div id="take-record" class="take-part"></div>
+              ${doc.print_label ? h`<button type="button" class="btn btn-quiet"
+                        id="print-record">${doc.print_label}</button>` : ""}
+            </div>
+          </div>
+
+          ${doc.opening ? h`<p class="prose soft">${doc.opening}</p>` : ""}
+          ${doc.opening_withheld ? h`<p class="note prose">${
+            doc.opening_withheld
+          }</p>` : ""}
+
+          <div class="prose small soft stack-tight">${
+            (doc.summary || []).map(function (line) { return h`<p>${line}</p>`; })
+          }</div>
+
+          ${(doc.parts || []).map(recordPart)}
+
+          <p><a class="btn" href="#/party/${encodeURIComponent(entityId)}">${
+            doc.back || ""
+          }</a></p>
+        </div>`);
+
+      /* Built from this record and from what the checks left on the party,
+         which is the same pair the report screen builds it from. Both are
+         fetched here only when the officer asks for the file. */
+      downloadAction(document.getElementById("take-record"), function () {
+        if (record) { return documentFor(doc, record, files, null); }
+        return get("/api/onboarding/" + encodeURIComponent(entityId))
+          .then(function (payload) {
+            record = payload;
+            return Promise.all((payload.findings || []).map(function (finding) {
+              if (!finding.case_id) { return Promise.resolve(null); }
+              return get("/api/cases/" + encodeURIComponent(finding.case_id))
+                .catch(function () { return null; });
+            }));
+          })
+          .then(function (fetched) {
+            files = fetched || [];
+            return documentFor(doc, record, files, null);
+          });
+      });
+
+      var printer = document.getElementById("print-record");
+      if (printer) {
+        printer.addEventListener("click", function () { window.print(); });
+      }
+    }).catch(function (error) { failed(where, error); });
+  }
+
+  function recordPart(part) {
+    return h`
+      <section class="card pad">
+        <h2 class="section-head">${part.heading}</h2>
+        ${part.lead ? h`<p class="prose soft small">${part.lead}</p>` : ""}
+        ${(part.facts || []).length ? h`<dl class="pairs">${
+          part.facts.map(function (fact) {
+            return h`<dt>${fact.tone ? h`<span class="dot" data-tone="${
+                       fact.tone
+                     }"></span> ` : ""}${fact.label}</dt>
+                     <dd>${fact.value}${fact.note ? h`
+                       <span class="faint"> ${fact.note}</span>` : ""}</dd>`;
+          })
+        }</dl>` : ""}
+        ${(part.entries || []).length ? h`<ul class="timeline">${
+          part.entries.map(function (entry) {
+            return h`<li>
+              ${entry.when ? h`<div class="when">${entry.when}</div>` : ""}
+              <div>${entry.tone ? h`<span class="dot" data-tone="${
+                entry.tone === "decision" ? "good" : entry.tone
+              }"></span> ` : ""}${entry.what}</div>
+              ${entry.who ? h`<div class="small faint">${entry.who}</div>` : ""}
+              ${entry.why ? h`<blockquote class="quote">${entry.why}</blockquote>` : ""}
+              ${entry.clause ? h`<div><span class="clause">${
+                word("clause_prefix", "")
+              } ${entry.clause}</span></div>` : ""}
+            </li>`;
+          })
+        }</ul>` : ""}
+        ${part.tail ? h`<p class="tiny faint prose">${part.tail}</p>` : ""}
+      </section>`;
+  }
+
   /* ---------- the router ---------- */
 
   function show() {
@@ -1818,6 +3069,7 @@
     if (at.name === "run" && at.a) { runScreen(at.a, at.b); return; }
     if (at.name === "report" && at.a) { reportScreen(at.a, at.b); return; }
     if (at.name === "queue") { queueScreen(at.a); return; }
+    if (at.name === "record" && at.a) { recordScreen(at.a); return; }
     if (at.name === "party" && at.a) { partyScreen(at.a); return; }
     if (at.name === "parties") { partiesScreen(); return; }
     if (at.name === "ask") { askScreen(); return; }
