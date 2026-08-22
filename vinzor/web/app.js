@@ -1168,13 +1168,36 @@
          requirement they came from. Both are read the same way. */
       var need = item.requirement || item;
       var unevidenced = item.held_but_unevidenced || need.held_but_unevidenced;
+      /* "You have filed something for this" and "you have filed nothing"
+         were told apart by the colour of a four-pixel dot and by nothing
+         else. So an officer dragged a passport in, watched the row it was
+         for stay exactly where it was, and concluded the upload had not
+         worked. It had: clause 5.4.5 distinguishes holding a document from
+         having verified what it proves, and the row was correctly still
+         open on the second. That is a real distinction and worth keeping --
+         but it has to be said in words, because nobody decodes a colour. */
       return h`<li>
         <span class="dot" data-tone="${unevidenced ? "today" : "later"}"></span>
         <div class="owed-body">
           <div class="owed-name">${need.asks_for || ""}</div>
-          <div class="owed-why">${need.because || ""}</div>
-          ${need.basis ? h`<div class="owed-basis">${need.basis}</div>` : ""}
+          ${unevidenced
+            ? h`<div class="owed-held">${
+                word("onboard_held_unevidenced", "")
+              }</div>`
+            : h`<div class="owed-why">${need.because || ""}</div>`}
+          ${need.basis
+            ? h`<details class="owed-more">
+                 <summary>${word("onboard_why_asked", "Why is this asked for?")}</summary>
+                 ${unevidenced && need.because
+                   ? h`<p class="owed-why">${need.because}</p>` : ""}
+                 <p class="owed-basis">${need.basis}</p>
+               </details>` : ""}
         </div>
+        ${unevidenced
+          ? h`<span class="badge" data-tone="today">${
+              word("onboard_held_badge", "Filed")
+            }</span>`
+          : ""}
         ${need.mandatory === false ? h`<span class="badge" data-tone="later">${
           word("onboard_practice", "Practice")
         }</span>` : ""}
@@ -1684,7 +1707,7 @@
       return Promise.resolve(recorded).then(function (doc) {
         return documentFor(doc, record, files, run);
       });
-    });
+    }, party && party.id);
 
     decisionBlock(document.getElementById("the-decision"), {
       heading: word("report_decision", "What only a person may now do"),
@@ -2950,12 +2973,25 @@ a { color: #000; }
     });
   }
 
-  function downloadAction(where, gather) {
+  /* `party` is an entity id. Given one, the download is a PDF built on the
+     server from the same record this screen was drawn from; the HTML that
+     `gather` builds stays as the fallback for a screen that has no party to
+     name.
+
+     PDF because of where the file goes. A compliance record is attached to
+     an email to a board, an auditor or the regulator, and an HTML file
+     arrives looking like a saved web page, opens differently on every
+     machine, and gives the recipient no way to tell whether the copy they
+     were sent is the copy that was written. */
+  function downloadAction(where, gather, party) {
     if (!where) { return; }
     mount(where, h`
-      <button type="button" class="btn" data-download>${
+      <button type="button" class="btn btn-primary" data-download>${
         word("report_download", "Download the report")
       }</button>
+      ${party ? h`<span class="tiny faint">${
+        word("report_download_kind", "")
+      }</span>` : ""}
       <span class="problem" hidden></span>`);
 
     var button = where.querySelector("[data-download]");
@@ -2963,6 +2999,14 @@ a { color: #000; }
     var label = button.textContent;
 
     button.addEventListener("click", function () {
+      if (party) {
+        /* Straight at the route. The browser saves what the server sends,
+           so the bytes on disk are the bytes that were rendered and nothing
+           in this page had a chance to change them. */
+        window.location.href =
+          "/api/report.pdf?party=" + encodeURIComponent(party);
+        return;
+      }
       button.disabled = true;
       problem.hidden = true;
       button.textContent = word("agents_watching", label);
@@ -3492,7 +3536,7 @@ a { color: #000; }
             files = fetched || [];
             return documentFor(doc, record, files, null);
           });
-      });
+      }, entityId);
 
       var printer = document.getElementById("print-record");
       if (printer) {

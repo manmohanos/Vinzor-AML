@@ -162,15 +162,21 @@ def _encode(value: Any) -> Any:
     return value
 
 
-def _filename(name: str) -> str:
+def _filename(name: str, suffix: str = "xlsx") -> str:
     """A download name that survives every operating system.
 
     A quotation mark or a slash in a filename is how a download arrives
     with no extension and will not open, and party names contain both.
+
+    The extension is an argument rather than a constant. It was ``.xlsx``,
+    written into the function, because for a while a workbook was the only
+    thing this server handed out -- so the first PDF route to use it would
+    have sent a correct PDF down under a name that told the operating system
+    to open it in a spreadsheet.
     """
-    keep = [ch if (ch.isalnum() or ch in " -_.") else " " for ch in name]
+    keep = [ch if (ch.isalnum() or ch in " -_") else " " for ch in name]
     clean = " ".join("".join(keep).split())[:90] or "vinzor"
-    return f"{clean}.xlsx"
+    return f"{clean}.{suffix}"
 
 
 def _task_json(task, today: str = "") -> dict:
@@ -995,6 +1001,8 @@ def build_app(engine: Vinzor, keys=None):
                 self._thread()
             elif route == "/api/export":
                 self._export()
+            elif route == "/api/report.pdf":
+                self._printed_report()
             elif route == "/api/tasks":
                 self._tasks()
             elif route.startswith("/api/tasks/"):
@@ -1217,6 +1225,50 @@ def build_app(engine: Vinzor, keys=None):
                             for heading, asks in OPENERS],
                 "again": [t.asked for t in talk.recent_asks(who)],
             })
+
+        def _printed_report(self) -> None:
+            """One party's record as the PDF somebody actually sends.
+
+            The download was an HTML file, which is a fine thing to read and
+            the wrong thing to attach to an email going to a board or an
+            auditor: it opens differently on every machine and the recipient
+            cannot tell whether the copy they were sent is the copy that was
+            written.
+
+            Rendered from the same ``dossier`` the screen draws, so the
+            document a firm sends and the screen its officer read cannot
+            disagree with each other.
+            """
+            from .dossier import dossier as build
+            from .printing import filename_for, render
+
+            if self._who() is None:
+                self._problem("sign_in_first", HTTPStatus.UNAUTHORIZED)
+                return
+            party = self._query("party") or ""
+            if party not in engine.state.graph.entities:
+                self._problem("not_found", HTTPStatus.NOT_FOUND)
+                return
+            today = date.today().isoformat()
+            # ``record=False``: asking for a printable copy is not an event,
+            # and a download that wrote to an append-only log would put a row
+            # in the ledger every time somebody pressed a button twice.
+            paper = build(engine, party, today, workspace=WORKSPACE,
+                          record=False)
+            data = render(paper)
+
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header(
+                "Content-Disposition",
+                'attachment; filename="%s"' % _filename(
+                    filename_for(paper, today).rsplit(".", 1)[0], "pdf"))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(data)
+            self.wfile.flush()
 
         def _export(self) -> None:
             """The book as a workbook, or one party's record.

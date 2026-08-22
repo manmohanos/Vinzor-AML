@@ -645,6 +645,20 @@ UI = {
     ),
     # What a document turned out to say. The field names are the record's
     # own and are not words an officer uses, so each is given one here.
+    # The state an officer read as "my upload did nothing". It is not that:
+    # a document is held, and nobody has yet said what it proves. Clause
+    # 5.4.5 asks a firm to verify identity from a document, not merely to
+    # possess one, and the difference was being carried by a dot colour.
+    "onboard_held_unevidenced": (
+        "You have filed a document for this. It is on the record as held — "
+        "nobody has yet confirmed what it proves, which is what the rule "
+        "asks for separately."
+    ),
+    "onboard_held_badge": "Filed",
+    "onboard_why_asked": "Why is this asked for?",
+    "report_download_kind": (
+        "PDF — the format to attach to an email"
+    ),
     "read_field_name": "Name",
     "read_field_dob": "Date of birth",
     "read_field_nationality": "Nationality",
