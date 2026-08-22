@@ -70,6 +70,8 @@ LABELS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("date_of_incorporation",
      ("date of incorporation", "date of registration", "incorporated on",
       "registered on")),
+    ("expires", ("date of expiry", "expiry date", "valid until",
+                 "date of validity", "expires on")),
     ("dob", ("date of birth", "birth date", "dob", "born on")),
     ("nationality", ("nationality", "citizenship")),
     ("country_of_incorporation",
@@ -151,6 +153,11 @@ class Reading:
     #: Said plainly when there is nothing to read, rather than returning an
     #: empty list that looks like a document with nothing in it.
     unreadable: str = ""
+    #: Set where the document says it expired before the day it was filed.
+    #: A sentence rather than a flag, because it has to be readable on a
+    #: screen and on the printed record without anything in between
+    #: deciding how to phrase it.
+    expired: str = ""
 
     @property
     def disagreements(self) -> tuple[Proposal, ...]:
@@ -230,7 +237,7 @@ def fields_in(text: str, kind: str) -> tuple[tuple[str, str, str], ...]:
                 if field in _MUST_HAVE_A_DIGIT and not any(
                         ch.isdigit() for ch in rest):
                     break
-                if field in ("dob", "date_of_incorporation"):
+                if field in ("dob", "date_of_incorporation", "expires"):
                     iso = _as_iso(rest)
                     if not iso:
                         break
@@ -265,7 +272,38 @@ def fields_in(text: str, kind: str) -> tuple[tuple[str, str, str], ...]:
     return tuple((field, value, line) for field, (value, line) in found.items())
 
 
-def _looked_at(path_or_bytes, *, kind: str, holds, eyes):
+def expiry_trouble(proposals, today: str) -> str:
+    """The sentence to say where a document has expired, or "".
+
+    ``today`` is passed in and never read from a clock, because no module
+    under ``vinzor/`` may read one -- the same rule that makes every check
+    take the date as an argument.
+
+    Clause 1.3.30 asks for an officially valid document, and a passport that
+    ran out five years before it was handed over is not one. The product read
+    the rest of the page and said nothing about that, so an expired passport
+    satisfied a document requirement exactly as a valid one did.
+
+    It is a *finding*, not a refusal. The document is still filed, because
+    what a firm holds is a fact about the firm and deleting it would be
+    losing evidence. What changes is that the officer is told.
+    """
+    if not today:
+        return ""
+    for proposal in proposals:
+        if proposal.field != "expires" or not proposal.value:
+            continue
+        if proposal.value < today:
+            return (
+                f"This document expired on {proposal.value}, before the day "
+                f"it was filed. Clause 1.3.30 asks for an officially valid "
+                f"document, and this is not one. It is on the record as "
+                f"filed, and a current document has to be obtained."
+            )
+    return ""
+
+
+def _looked_at(path_or_bytes, *, kind: str, holds, eyes, today=""):
     """The photograph reader, or None if there is nobody to ask.
 
     None rather than an empty Reading, so the caller keeps its own sentence
@@ -285,12 +323,12 @@ def _looked_at(path_or_bytes, *, kind: str, holds, eyes):
                 data = handle.read()
     except OSError:
         return None
-    return look(data, kind=kind, eyes=eyes, holds=holds)
+    return look(data, kind=kind, eyes=eyes, holds=holds, today=today)
 
 
 def read(path_or_bytes, *, kind: str,
          holds: Optional[Mapping[str, str]] = None,
-         eyes: Optional[Any] = None) -> Reading:
+         eyes: Optional[Any] = None, today: str = "") -> Reading:
     """What this document appears to show, beside what the record holds.
 
     ``holds`` is the party's current attributes. Where the two agree the
@@ -322,7 +360,8 @@ def read(path_or_bytes, *, kind: str,
         # A file the PDF reader cannot open is very often a photograph, and a
         # photograph is what a customer actually sends. Ask the other reader
         # before giving up on it.
-        looked = _looked_at(path_or_bytes, kind=kind, holds=holds, eyes=eyes)
+        looked = _looked_at(path_or_bytes, kind=kind, holds=holds,
+                            eyes=eyes, today=today)
         if looked is not None:
             return looked
         return Reading(kind=kind, unreadable=(
@@ -337,7 +376,8 @@ def read(path_or_bytes, *, kind: str,
 
     text = "\n".join(p.text for p in read_pages)
     if len(text.strip()) < 20:
-        looked = _looked_at(path_or_bytes, kind=kind, holds=holds, eyes=eyes)
+        looked = _looked_at(path_or_bytes, kind=kind, holds=holds,
+                            eyes=eyes, today=today)
         if looked is not None:
             return looked
         return Reading(kind=kind, unreadable=(
@@ -357,4 +397,5 @@ def read(path_or_bytes, *, kind: str,
         return Reading(kind=kind, unreadable=(
             "Nothing this system recognises was found in this document. It "
             "is on the record as filed."))
-    return Reading(kind=kind, proposals=tuple(proposals))
+    return Reading(kind=kind, proposals=tuple(proposals),
+                   expired=expiry_trouble(proposals, today))

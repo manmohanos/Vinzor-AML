@@ -1,0 +1,18 @@
+08-high-risk-person
+===================
+
+Party:  Vladimir Putin   (Person)
+
+WHAT THIS TESTS
+  A party who is genuinely on the watchlists.
+
+WHAT SHOULD HAPPEN
+  Sanctions matched, politically exposed matched, adverse media returns live articles. The file cannot be settled by an AML officer: clause 5.5(b)(iii) reserves that to senior management.
+
+DOES IT?  yes
+
+NOTE
+  No document needed. Onboard the name and run the checks. This is the fifteen-second moment -- four million watchlist entities, on our own machine, nothing leaving the building.
+
+UPLOAD
+  nothing - onboard the name alone

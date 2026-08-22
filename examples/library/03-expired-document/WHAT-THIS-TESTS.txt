@@ -1,0 +1,18 @@
+03-expired-document
+===================
+
+Party:  Rakesh Iyer   (Person)
+
+WHAT THIS TESTS
+  A passport that expired before the day it was filed.
+
+WHAT SHOULD HAPPEN
+  Clause 1.3.30 wants an officially valid document, and a document past its expiry is not one. The reader takes the expiry date off the page and says the document is no longer valid, naming the date and the clause. It is still filed and still read -- what a firm holds is a fact about the firm.
+
+DOES IT?  yes
+
+NOTE
+  This case was written as a known gap and closed the same afternoon: the product read every other line of a passport and said nothing about the expiry, so an out-of-date passport satisfied a document requirement exactly as a current one did. The date is compared against the day the document was filed, which is passed in -- nothing under vinzor/ reads a clock.
+
+UPLOAD
+  passport-iyer-EXPIRED.pdf

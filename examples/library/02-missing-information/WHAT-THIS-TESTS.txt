@@ -1,0 +1,18 @@
+02-missing-information
+======================
+
+Party:  Kavita Nair   (Person)
+
+WHAT THIS TESTS
+  An applicant who has handed over one document and nothing else.
+
+WHAT SHOULD HAPPEN
+  The outstanding list names what is still owed, why each is owed, and the clause it comes from. Identification reports the specific details still missing rather than a score.
+
+DOES IT?  yes
+
+NOTE
+  Upload only the passport. The interesting screen is the one listing what is still missing.
+
+UPLOAD
+  passport-nair.pdf

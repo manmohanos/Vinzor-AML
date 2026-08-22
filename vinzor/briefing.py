@@ -650,6 +650,7 @@ UI = {
     "read_field_nationality": "Nationality",
     "read_field_id_document_number": "Document number",
     "read_field_address": "Address",
+    "read_field_expires": "Expires",
     "read_field_pan": "Permanent account number",
     "read_field_cin": "Corporate identity number",
     "read_field_date_of_incorporation": "Date of incorporation",

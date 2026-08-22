@@ -1537,3 +1537,12 @@ table.grid.standing td { padding: 7px 12px 7px 0; vertical-align: middle; }
   border-left: 2px solid var(--line);
   padding-left: 10px;
 }
+
+/* A document that is no longer valid. Above the fields, not among them: it
+   is a statement about the paper, and the fields are what the paper says. */
+.filed-expired {
+  margin: 6px 0 2px;
+  color: var(--stop);
+  border-left: 2px solid var(--stop);
+  padding-left: 10px;
+}

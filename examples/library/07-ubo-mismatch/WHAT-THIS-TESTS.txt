@@ -1,0 +1,16 @@
+07-ubo-mismatch
+===============
+
+Party:  Meridian Holdings Private Limited   (Company)
+
+WHAT THIS TESTS
+  A beneficial ownership declaration that does not add up, on a company whose declared owner is another company.
+
+WHAT SHOULD HAPPEN
+  Ownership resolves to a company rather than a person and reports that beneficial ownership is not established. The declaration naming 62% is not taken as an answer, because clause 1.3.3 is about natural people and a structure that stops at another company has not been resolved.
+
+DOES IT?  yes
+
+UPLOAD
+  incorporation-meridian.pdf
+  ubo-meridian-STOPS-AT-A-COMPANY.pdf

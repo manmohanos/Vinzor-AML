@@ -130,7 +130,8 @@ def _fields_from(reply: Any) -> tuple:
 
 
 def read(data: bytes, *, kind: str, eyes: Callable,
-         holds: Optional[Mapping[str, str]] = None) -> Reading:
+         holds: Optional[Mapping[str, str]] = None,
+         today: str = "") -> Reading:
     """What a photographed document appears to show, for a person to confirm.
 
     ``eyes`` is a transport taking (image bytes, format, instruction) and
@@ -205,7 +206,12 @@ def read(data: bytes, *, kind: str, eyes: Callable,
         return Reading(kind=kind, unreadable=(
             "Nothing this system recognises was found in this photograph. It "
             "is on the record as filed."))
-    return Reading(kind=kind, proposals=tuple(proposals))
+    # The same expiry check the parser applies. A photographed passport that
+    # expired in 2021 is no more valid than a parsed one.
+    from .extraction import expiry_trouble
+
+    return Reading(kind=kind, proposals=tuple(proposals),
+                   expired=expiry_trouble(proposals, today))
 
 
 def bedrock_eyes(*, now, env: Optional[Mapping[str, str]] = None, http=None):

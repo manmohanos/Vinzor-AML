@@ -1,0 +1,18 @@
+06-altered-document
+===================
+
+Party:  Vikram Shetty   (Person)
+
+WHAT THIS TESTS
+  A document whose printed details do not agree with each other: the date of birth in the body is not the date encoded in the number.
+
+WHAT SHOULD HAPPEN
+  Nothing. This is the honest gap.
+
+DOES IT?  NO - see below
+
+NOTE
+  NOT CAUGHT AS TAMPERING. The product has no authenticity, integrity or template-conformity checking of any kind -- it reads what a document says and never asks whether the document is genuine. The impossible dates here are simply refused as dates, so the fields come back missing rather than wrong, which is the right failure but for the wrong reason. This is a real and large gap and is worth naming out loud.
+
+UPLOAD
+  pan-shetty-ALTERED.pdf

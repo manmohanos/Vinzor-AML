@@ -90,7 +90,7 @@ def test_every_proposal_carries_the_line_it_was_read_from():
         # officer cannot check, which is the only thing making these
         # trustworthy at all. Dates are exempt -- they are normalised to the
         # shape the record keeps, and the page said 14/03/1981.
-        if proposal.field in ("dob", "date_of_incorporation"):
+        if proposal.field in ("dob", "date_of_incorporation", "expires"):
             continue
         for word in proposal.value.split():
             assert word in proposal.seen_as, (
@@ -139,3 +139,60 @@ def test_the_words_it_looks_for_are_a_table_anyone_can_read():
     assert {"name", "dob", "pan", "address"} <= fields
     for _field, words in LABELS:
         assert all(word == word.lower() for word in words)
+
+
+# -- a document that is no longer valid ---------------------------------------
+
+
+def test_a_passport_that_has_expired_says_so():
+    """Clause 1.3.30 asks for an officially valid document, and one that ran
+    out five years before it was handed over is not one.
+
+    The product read the rest of the page and said nothing about the expiry,
+    so an expired passport satisfied a document requirement exactly as a
+    current one did.
+    """
+    library = Path(__file__).resolve().parent.parent / "examples" / "library"
+    reading = read(library / "03-expired-document" / "passport-iyer-EXPIRED.pdf",
+                   kind="passport", today="2026-08-22")
+    assert reading.expired
+    assert "2021-02-11" in reading.expired
+    assert "1.3.30" in reading.expired
+
+
+def test_a_current_passport_says_nothing_about_expiry():
+    reading = read(PACK / "passport-bhat.pdf", kind="passport",
+                   today="2026-08-22")
+    assert not reading.expired
+    assert by_field(reading)["expires"] == "2032-07-22"
+
+
+def test_an_expired_document_is_still_filed_and_still_read():
+    """A finding, not a refusal. What a firm holds is a fact about the firm,
+    and refusing to record it would be losing the evidence that they were
+    given an out-of-date passport."""
+    library = Path(__file__).resolve().parent.parent / "examples" / "library"
+    reading = read(library / "03-expired-document" / "passport-iyer-EXPIRED.pdf",
+                   kind="passport", today="2026-08-22")
+    got = by_field(reading)
+    assert got["name"] == "RAKESH IYER"
+    assert got["dob"] == "1975-06-02"
+
+
+def test_expiry_is_never_judged_without_being_told_the_day():
+    """No module under vinzor/ may read a clock. With no date supplied there
+    is no opinion to give, rather than a wrong one."""
+    library = Path(__file__).resolve().parent.parent / "examples" / "library"
+    reading = read(library / "03-expired-document" / "passport-iyer-EXPIRED.pdf",
+                   kind="passport")
+    assert not reading.expired
+
+
+def test_a_utility_bill_may_not_evidence_an_expiry():
+    """``expires`` is on the three kinds that print one. A bill is not one."""
+    from vinzor.documents import KINDS
+
+    assert "expires" in KINDS["passport"][1]
+    assert "expires" in KINDS["driving_licence"][1]
+    assert "expires" not in KINDS["utility_bill"][1]
+    assert "expires" not in KINDS["pan_card"][1]

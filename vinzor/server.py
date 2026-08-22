@@ -652,12 +652,14 @@ def build_app(engine: Vinzor, keys=None):
                 looking = None
             reading = read_document(
                 data, kind=kind, eyes=looking,
+                today=date.today().isoformat(),
                 holds=dict(getattr(entity, "attributes", {}) or {},
                            name=getattr(entity, "name", "")))
             self._json({
                 "filed": True, "filename": filename, "kind": kind,
                 "read": {
                     "unreadable": reading.unreadable,
+                    "expired": reading.expired,
                     "proposals": [
                         {"field": p.field, "value": p.value,
                          "seen_as": p.seen_as, "agrees": p.agrees,

@@ -1,0 +1,19 @@
+04-inconsistent-dob
+===================
+
+Party:  Anand Bhat   (Person)
+
+WHAT THIS TESTS
+  Two documents from the same person giving two dates of birth.
+
+WHAT SHOULD HAPPEN
+  The reader proposes the passport's date beside the one already on the record and marks them as disagreeing. It does not choose. One of them is wrong and a person decides which.
+
+DOES IT?  yes
+
+NOTE
+  Upload the passport first and confirm it, then the PAN card. The second upload is the one that shows the disagreement.
+
+UPLOAD
+  pan-bhat-DIFFERENT-DOB.pdf
+  passport-bhat.pdf

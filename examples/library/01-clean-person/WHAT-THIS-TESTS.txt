@@ -1,0 +1,17 @@
+01-clean-person
+===============
+
+Party:  Anand Bhat   (Person)
+
+WHAT THIS TESTS
+  The happy path: every paper agrees with the record and with itself.
+
+WHAT SHOULD HAPPEN
+  Identification complete. Documents satisfied. Nothing outstanding that a person has to chase.
+
+DOES IT?  yes
+
+UPLOAD
+  pan-bhat.pdf
+  passport-bhat.pdf
+  utility-bhat.pdf

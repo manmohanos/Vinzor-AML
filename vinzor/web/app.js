@@ -1198,7 +1198,13 @@
         return h`<p class="filed-unread small">${file.unreadable}</p>`;
       }
       if (!(file.proposals || []).length) { return ""; }
-      return h`<ul class="filed-read">${file.proposals.map(function (one) {
+      /* An expired document is still filed and still read -- what a firm
+         holds is a fact about the firm. What changes is that this is said,
+         above the fields rather than among them, because it is about the
+         paper and not about the party. */
+      var expired = file.expired
+        ? h`<p class="filed-expired small">${file.expired}</p>` : "";
+      return h`${expired}<ul class="filed-read">${file.proposals.map(function (one) {
         return h`<li>
           <span class="filed-field">${word("read_field_" + one.field, one.field)}</span>
           <span class="filed-value">${one.value}</span>
@@ -1265,6 +1271,7 @@
             var got = (reply && reply.read) || {};
             row.proposals = got.proposals || [];
             row.unreadable = got.unreadable || "";
+            row.expired = got.expired || "";
             drawFiled();
             return reread();
           })

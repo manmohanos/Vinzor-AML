@@ -53,12 +53,18 @@ from .model import EventType
 #: never more, so an officer cannot quietly promote a utility bill into
 #: proof of a nationality.
 KINDS: Mapping[str, tuple] = {
+    # ``expires`` is on the three kinds that actually print one. It is not
+    # an attribute the record keeps about a *party* -- a person does not have
+    # an expiry date -- it is a property of the paper, and it is here so the
+    # reader may take it off the page and say the paper is no longer valid.
     "passport": ("Passport",
-                 ("name", "dob", "nationality", "id_document_number")),
+                 ("name", "dob", "nationality", "id_document_number",
+                  "expires")),
     "pan_card": ("PAN card", ("name", "pan", "dob")),
     "aadhaar": ("Aadhaar", ("name", "dob", "address")),
     "driving_licence": ("Driving licence",
-                        ("name", "dob", "address", "id_document_number")),
+                        ("name", "dob", "address", "id_document_number",
+                         "expires")),
     "utility_bill": ("Utility bill", ("name", "address")),
     "bank_statement": ("Bank statement", ("name", "address")),
     "incorporation": ("Certificate of incorporation",
