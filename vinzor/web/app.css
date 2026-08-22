@@ -18,27 +18,54 @@
 /* ---------- tokens ---------- */
 
 :root {
-  --page: #f7f8fa;
-  --card: #ffffff;
-  --sunk: #fbfbfd;
+  /* The brand is two colours: ink and bone. Everything neutral here is
+     built from those, so the product looks like Vinzor rather than like
+     every other enterprise SaaS shell.
 
-  --ink: #0f172a;          /* dark navy, the colour of every heading */
-  --ink-body: #1f2937;
-  --ink-soft: #4b5563;
-  --ink-faint: #6b7280;
+     The greys are warm on purpose. Bone (#F4F3EF) has more red in it than
+     blue, and dropping the usual cool slate ramp on top of it makes the
+     page look like two designs arguing -- headings that read faintly
+     violet against a background that reads faintly yellow. These are
+     mixed toward the bone instead. */
+  --page: #f4f3ef;        /* brand: bone */
+  --card: #ffffff;        /* white cards on bone separate without a shadow */
+  --sunk: #faf9f6;
 
-  --line: #e4e7ec;         /* the hairline that does all the structural work */
-  --line-soft: #eef0f4;
+  --ink: #0a0a0b;         /* brand: ink. Every heading. */
+  --ink-body: #2a2a2e;
+  --ink-soft: #55555c;
+  /* 4.75:1 on bone. It was #7a7a82 -- 3.83:1, which is below AA for
+     normal text, and this token carries the workspace name, every
+     timestamp and every "of 8" count. A tool somebody reads all day
+     should not make them squint at the parts that orient them. */
+  --ink-faint: #6b6b75;
 
-  --indigo: #4f46e5;
-  --indigo-dark: #4338ca;
-  --indigo-wash: #eef2ff;
+  --line: #e3e1da;         /* the hairline that does all the structural work */
+  --line-soft: #edebe4;
+
+  /* The accent is ink, not a borrowed indigo.
+
+     The brand has exactly two colours and neither of them is purple. A
+     primary button in somebody else's indigo is the tell of a template,
+     and it also has to compete with the severity ramp for meaning. Ink
+     does not compete: it is already the colour of every heading, so a
+     solid ink button reads as "this is the thing" without introducing a
+     fifth hue to a screen that is trying to make four of them mean
+     something specific. */
+  --accent: #0a0a0b;
+  --accent-hover: #2a2a2e;
+  --accent-on: #f4f3ef;    /* bone, for text sitting on ink */
+  --accent-wash: #eeece5;  /* the selected row: bone, one step down */
 
   /* Risk. Small badges, dots and thin bars only — never a card fill. */
-  --stop: #dc2626;
-  --stop-wash: #fef2f2;
+  /* 5.17:1 on bone, up from 4.35. This is the colour of CRITICAL --
+     "stop, do not let this proceed" -- and it was the least legible thing
+     on the severity ramp. The most urgent state must not be the hardest
+     one to read. */
+  --stop: #c81e1e;
+  --stop-wash: #fbeeea;
   --today: #b45309;
-  --today-wash: #fffbeb;
+  --today-wash: #fbf4e4;
   /* Slate, not the accent. This was #4f46e5 -- byte-identical to --indigo,
      the colour that means "selected", "current" and "press me" everywhere
      else in the product. So the severity ladder an untrained officer has to
@@ -46,14 +73,14 @@
      looked like a highlighted row. A colour cannot be decorative and
      semantic at once. */
   --week: #475569;
-  --week-wash: #f1f5f9;
-  --later: #6b7280;
-  --later-wash: #f3f4f6;
+  --week-wash: #edeeef;
+  --later: #63666c;   /* 5.19:1 on bone, up from 4.35 */
+  --later-wash: #eeedea;
   --settled: #047857;
-  --settled-wash: #ecfdf5;
+  --settled-wash: #e8f4ec;
 
   --radius: 8px;
-  --whisper: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --whisper: 0 1px 2px rgba(10, 10, 11, 0.05);
   --rail-width: 220px;
 
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -82,12 +109,12 @@ h2 { font-size: 17px; }
 h3 { font-size: 15px; }
 p { margin: 0; }
 
-a { color: var(--indigo); text-decoration: none; }
+a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* One focus ring everywhere, and it is always visible. */
 :focus-visible {
-  outline: 2px solid var(--indigo);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -131,12 +158,35 @@ a:hover { text-decoration: underline; }
 }
 
 .rail-mark {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-size: 17px;
   font-weight: 650;
   letter-spacing: -0.01em;
   color: var(--ink);
   padding: 0 18px 4px;
 }
+
+/* The mark takes its colour from whatever it sits in, so one set of paths
+   serves the ink sidebar and any inverted lockup. */
+.mark { fill: currentColor; display: block; flex: none; }
+
+.lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 2px;
+  font-size: 34px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* The wordmark sits optically low against a mark whose points run to the
+   very top of its box; a hair of lift puts the x-height where the eye
+   expects it. */
+.lockup span, .rail-mark span { transform: translateY(-1px); }
 
 .rail-place {
   padding: 0 18px 18px;
@@ -159,8 +209,8 @@ a:hover { text-decoration: underline; }
 .rail-nav a:hover { background: var(--line-soft); text-decoration: none; }
 
 .rail-nav a[aria-current="page"] {
-  background: var(--indigo-wash);
-  color: var(--indigo-dark);
+  background: var(--accent-wash);
+  color: var(--accent-hover);
   font-weight: 550;
 }
 .rail-nav a[aria-current="page"]::before {
@@ -171,7 +221,7 @@ a:hover { text-decoration: underline; }
   bottom: 6px;
   width: 3px;
   border-radius: 0 2px 2px 0;
-  background: var(--indigo);
+  background: var(--accent);
 }
 
 .rail-foot {
@@ -263,28 +313,30 @@ button {
 .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 
 .btn-primary {
-  background: var(--indigo);
-  border-color: var(--indigo);
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  /* Bone, not white. Pure white on ink is a harsher edge than this brand
+     wants, and the whole palette is warm. */
+  color: var(--accent-on);
 }
-.btn-primary:hover { background: var(--indigo-dark); text-decoration: none; }
-.btn-primary[disabled]:hover { background: var(--indigo); }
+.btn-primary:hover { background: var(--accent-hover); text-decoration: none; }
+.btn-primary[disabled]:hover { background: var(--accent); }
 
 .btn-big { padding: 13px 22px; font-size: 16px; font-weight: 550; }
 
 .btn-quiet {
   border-color: transparent;
   background: transparent;
-  color: var(--indigo);
+  color: var(--accent);
   padding: 6px 8px;
 }
-.btn-quiet:hover { background: var(--indigo-wash); }
+.btn-quiet:hover { background: var(--accent-wash); }
 
 .btn-link {
   border: 0;
   background: none;
   padding: 0;
-  color: var(--indigo);
+  color: var(--accent);
   font-size: inherit;
   text-align: left;
 }
@@ -323,7 +375,7 @@ input::placeholder, textarea::placeholder { color: #9aa2af; }
 [data-tone="good"].dot, .dot[data-tone="good"] { background: var(--settled); }
 [data-tone="plain"].dot { background: #c3c9d4; }
 .dot[data-tone="waiting"] { background: transparent; box-shadow: inset 0 0 0 1.5px #c3c9d4; }
-.dot[data-tone="running"] { background: var(--indigo); }
+.dot[data-tone="running"] { background: var(--accent); }
 
 .badge {
   display: inline-flex;
@@ -346,7 +398,7 @@ input::placeholder, textarea::placeholder { color: #9aa2af; }
 
 /* A thin bar, never a fill. */
 .bar { height: 4px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--indigo); border-radius: 2px; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
 .bar i[data-tone="stop"] { background: var(--stop); }
 .bar i[data-tone="today"] { background: var(--today); }
 .bar i[data-tone="good"] { background: var(--settled); }
@@ -423,7 +475,7 @@ ul.bullets li { margin-bottom: 4px; }
   border-radius: 6px;
   padding: 11px 14px;
 }
-.doorway .who button:hover { border-color: var(--indigo); background: var(--indigo-wash); }
+.doorway .who button:hover { border-color: var(--accent); background: var(--accent-wash); }
 .doorway .who .role { color: var(--ink-faint); font-size: 13px; }
 .doorway form { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
 
@@ -465,7 +517,7 @@ ul.bullets li { margin-bottom: 4px; }
   font-size: 12.5px;
   color: var(--ink-soft);
 }
-.ask-tries button:hover { border-color: var(--indigo); color: var(--indigo-dark); }
+.ask-tries button:hover { border-color: var(--accent); color: var(--accent-hover); }
 
 .tally {
   display: grid;
@@ -512,8 +564,8 @@ ul.bullets li { margin-bottom: 4px; }
   font-size: 12.5px;
   color: var(--ink-faint);
 }
-.steps li[data-at="now"] { border-top-color: var(--indigo); color: var(--indigo-dark); font-weight: 600; }
-.steps li[data-at="done"] { border-top-color: var(--indigo); color: var(--ink-soft); }
+.steps li[data-at="now"] { border-top-color: var(--accent); color: var(--accent-hover); font-weight: 600; }
+.steps li[data-at="done"] { border-top-color: var(--accent); color: var(--ink-soft); }
 
 .ask-one h1 { font-size: 28px; margin-bottom: 8px; }
 .ask-one > .prose { margin-bottom: 24px; }
@@ -536,10 +588,10 @@ ul.bullets li { margin-bottom: 4px; }
 .kind .kind-name { display: block; font-weight: 600; color: var(--ink); font-size: 15.5px; margin-bottom: 3px; }
 .kind .kind-note { display: block; font-size: 13px; color: var(--ink-soft); }
 .kind[aria-pressed="true"] {
-  border-color: var(--indigo);
-  background: var(--indigo-wash);
+  border-color: var(--accent);
+  background: var(--accent-wash);
 }
-.kind[aria-pressed="true"] .kind-name { color: var(--indigo-dark); }
+.kind[aria-pressed="true"] .kind-name { color: var(--accent-hover); }
 
 .wizard-foot {
   display: flex;
@@ -562,12 +614,12 @@ ul.bullets li { margin-bottom: 4px; }
   text-align: center;
   color: var(--ink-soft);
 }
-.drop.over { border-color: var(--indigo); background: var(--indigo-wash); color: var(--indigo-dark); }
+.drop.over { border-color: var(--accent); background: var(--accent-wash); color: var(--accent-hover); }
 .drop input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
 /* The real file input is inside its label and out of sight, so the ring it
    would have shown on focus has to be drawn on the label instead. A control
    that can be tabbed to but not seen is a control nobody can use. */
-.drop label.btn:focus-within { outline: 2px solid var(--indigo); outline-offset: 2px; }
+.drop label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .owed { list-style: none; margin: 0; padding: 0; }
 .owed li {
@@ -681,7 +733,7 @@ ul.bullets li { margin-bottom: 4px; }
   height: 8px;
   border-radius: 50%;
   background: var(--card);
-  box-shadow: inset 0 0 0 1.5px var(--indigo);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 .chain .chain-who { color: var(--ink); font-weight: 550; }
 .chain .chain-share { color: var(--ink-soft); font-size: 13.5px; }
@@ -703,7 +755,7 @@ ul.bullets li { margin-bottom: 4px; }
 .choice { flex: 1 1 220px; min-width: 200px; text-align: left; padding: 12px 14px; }
 .choice .choice-label { display: block; font-weight: 600; color: var(--ink); }
 .choice .choice-means { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
-.choice[aria-pressed="true"] { border-color: var(--indigo); background: var(--indigo-wash); }
+.choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-wash); }
 .choice[disabled] .choice-label { color: var(--ink-faint); }
 
 .confirm-bar {
@@ -763,7 +815,7 @@ ul.bullets li { margin-bottom: 4px; }
 .hits li { border-bottom: 1px solid var(--line-soft); }
 .hits li:last-child { border-bottom: 0; }
 .hits button { display: flex; width: 100%; gap: 10px; align-items: baseline; padding: 10px 0; background: none; border: 0; text-align: left; }
-.hits button:hover .hit-name { color: var(--indigo-dark); text-decoration: underline; }
+.hits button:hover .hit-name { color: var(--accent-hover); text-decoration: underline; }
 .hit-name { color: var(--ink); font-weight: 550; }
 .hit-kind { color: var(--ink-faint); font-size: 13px; margin-left: auto; }
 
