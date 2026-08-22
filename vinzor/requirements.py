@@ -97,7 +97,19 @@ def _person(extra: tuple[Requirement, ...] = ()) -> tuple[Requirement, ...]:
             asks_for="a photo identity document",
             because="it is the only thing that evidences who this person is, "
                     "rather than what they told us",
-            satisfied_by=("passport", "driving_licence", "aadhaar"),
+            # A voter identity card is named in PML Rules 9(4)(a) alongside
+            # the others and was missing from this list, so an investor
+            # holding one had nothing on file that could satisfy this.
+            #
+            # A non-Indian national identity card is deliberately absent.
+            # It can be filed and it is read, but clause 1.3.30 and PML
+            # Rules 9(4)(a) name what counts as an officially valid
+            # document, and a German or Singaporean identity card is not
+            # among them. Accepting one here would be this system inventing
+            # a rule in the firm's favour, which is the direction that gets
+            # a firm into trouble.
+            satisfied_by=("passport", "driving_licence", "aadhaar",
+                          "voter_id"),
             basis="1.3.30 (what counts as an officially valid document); 5.4.3(c); Annexure II Part B(a); PML Rules 9(4)(a)",
         ),
         Requirement(
@@ -114,7 +126,8 @@ def _person(extra: tuple[Requirement, ...] = ()) -> tuple[Requirement, ...]:
             because="the identity document often carries an old address, and "
                     "clause 5.4.2 asks for the current one",
             satisfied_by=("proof_of_address", "utility_bill",
-                          "bank_statement", "aadhaar", "driving_licence"),
+                          "bank_statement", "aadhaar", "driving_licence",
+                          "voter_id"),
             basis="5.4.2(a)(vi), which excludes a post office box; 5.4.3(c); 1.3.30 third proviso",
         ),
         Requirement(
@@ -176,7 +189,19 @@ def _legal(constitution: tuple[str, ...],
             because="the person acting for a company is a person, and clause "
                     "5.4.2(a) applies to them exactly as it would if they "
                     "were investing themselves",
-            satisfied_by=("passport", "driving_licence", "aadhaar"),
+            # A voter identity card is named in PML Rules 9(4)(a) alongside
+            # the others and was missing from this list, so an investor
+            # holding one had nothing on file that could satisfy this.
+            #
+            # A non-Indian national identity card is deliberately absent.
+            # It can be filed and it is read, but clause 1.3.30 and PML
+            # Rules 9(4)(a) name what counts as an officially valid
+            # document, and a German or Singaporean identity card is not
+            # among them. Accepting one here would be this system inventing
+            # a rule in the firm's favour, which is the direction that gets
+            # a firm into trouble.
+            satisfied_by=("passport", "driving_licence", "aadhaar",
+                          "voter_id"),
             basis="5.4.2(c); PML Rules 9(3), which asks for the identity of each person authorised to transact",
         ),
         Requirement(

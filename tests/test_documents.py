@@ -354,3 +354,76 @@ def test_every_kind_names_itself_in_words(engine):
     for key, (called, _supports) in KINDS.items():
         assert called and called != key
         assert called[0].isupper()
+
+
+# -- the documents an international centre actually receives ------------------
+
+
+class _Paper:
+    """A document on file, as ``outstanding`` reads one."""
+
+    def __init__(self, kind, evidences=()):
+        self.kind = kind
+        self.evidences = tuple(evidences)
+
+
+def test_a_voter_card_can_satisfy_the_identity_requirement():
+    """PML Rules 9(4)(a) names the voter identity card alongside the passport
+    and the driving licence, and it was not on the list at all -- so an
+    investor whose identity document was their voter card had nowhere to file
+    it and nothing that could ever close the requirement."""
+    from vinzor.documents import KINDS
+    from vinzor.model import EntityKind
+    from vinzor.requirements import outstanding
+
+    assert "voter_id" in KINDS
+
+    held = outstanding(EntityKind.PERSON, (_Paper("voter_id"),))
+    identity = [o for o in held if o.requirement.slug == "identity"]
+    assert identity, "the requirement vanished rather than staying open"
+    assert identity[0].held_but_unevidenced, (
+        "a voter card was not recognised as something that could satisfy this")
+
+    evidenced = outstanding(EntityKind.PERSON,
+                            (_Paper("voter_id", ("name", "dob")),))
+    assert not [o for o in evidenced if o.requirement.slug == "identity"]
+
+
+def test_a_foreign_identity_card_is_read_but_is_not_an_official_document():
+    """The distinction this product exists to keep.
+
+    A German or Singaporean identity card can be filed and is read -- a name
+    and a date of birth that disagree with the record are worth knowing
+    however the paper is classified. It does not satisfy the identity
+    requirement, because clause 1.3.30 and PML Rules 9(4)(a) name what counts
+    as an officially valid document and it is not among them. Accepting one
+    would be this system inventing a rule in the firm's favour.
+    """
+    from vinzor.documents import KINDS
+    from vinzor.model import EntityKind
+    from vinzor.requirements import outstanding
+
+    assert "national_id" in KINDS
+    assert "dob" in KINDS["national_id"][1], "it is still read"
+    assert "nationality" in KINDS["national_id"][1]
+
+    # Even fully evidenced, it does not close the identity requirement.
+    held = outstanding(EntityKind.PERSON,
+                       (_Paper("national_id", ("name", "dob", "nationality")),))
+    identity = [o for o in held if o.requirement.slug == "identity"]
+    assert identity, (
+        "a foreign identity card was accepted as an officially valid document")
+    assert not identity[0].held_but_unevidenced, (
+        "it should not even read as partway there")
+
+
+def test_the_list_has_somewhere_to_put_a_foreign_investors_papers():
+    """This is an international financial centre. A list offering only
+    Aadhaar, a permanent account number and an Indian driving licence has no
+    home for the primary identity document of most of the investors GIFT
+    City exists to serve."""
+    from vinzor.documents import KINDS
+
+    reads_identity = {k for k, (_label, fields) in KINDS.items()
+                      if "dob" in fields and "name" in fields}
+    assert {"passport", "national_id", "voter_id"} <= reads_identity

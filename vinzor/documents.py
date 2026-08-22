@@ -65,6 +65,27 @@ KINDS: Mapping[str, tuple] = {
     "driving_licence": ("Driving licence",
                         ("name", "dob", "address", "id_document_number",
                          "expires")),
+    # An Indian officially valid document under PML Rules 9(4)(a), and it
+    # was not on this list at all -- so an investor whose identity document
+    # was their voter card had nowhere to file it and the requirement it
+    # satisfies stayed open.
+    "voter_id": ("Voter identity card",
+                 ("name", "dob", "address", "id_document_number")),
+    # A foreign national's identity card. Filed and read, and deliberately
+    # *not* an officially valid document: clause 1.3.30 and PML Rules 9(4)(a)
+    # name what counts, and a German or Singaporean identity card is not on
+    # that list. It is still worth reading -- a name and a date of birth that
+    # disagree with the record are worth knowing however the paper is
+    # classified -- and this product's whole discipline is that reading a
+    # document and accepting it as evidence are two different acts.
+    #
+    # It exists because this is an international financial centre. A list
+    # offering only Aadhaar, PAN and an Indian driving licence has no place
+    # to put the primary identity document of most of the investors GIFT
+    # City is for.
+    "national_id": ("National identity card (non-Indian)",
+                    ("name", "dob", "nationality", "id_document_number",
+                     "expires")),
     "utility_bill": ("Utility bill", ("name", "address")),
     "bank_statement": ("Bank statement", ("name", "address")),
     "incorporation": ("Certificate of incorporation",
