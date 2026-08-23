@@ -426,6 +426,7 @@ class Vinzor:
                             papers=self.state.papers,
                             capital=self.state.capital,
                             book=self.state.book,
+                            risk=self.state.risk,
                         ),
                         self.policies,
                     )

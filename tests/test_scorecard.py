@@ -25,7 +25,6 @@ from vinzor.scorecard import (
     WEIGHTS,
     band_for,
     propose,
-    propose_for,
 )
 
 
@@ -184,10 +183,10 @@ def test_who_answered_a_factor_travels_with_its_contribution():
     assert found.counted[0].answered_by == "Meera Nair"
 
 
-def test_a_party_nobody_has_assessed_proposes_low_and_says_why(engine):
+def test_a_party_nobody_has_assessed_proposes_low_and_says_why():
     """LOW on no evidence is what the arithmetic says. It is not a finding,
     and the proposal carries the sentence that stops it being read as one."""
-    found = propose_for(None)
+    found = propose({})
     assert found.band == LOW
     assert found.thin
     assert found.weighed == 0
@@ -197,7 +196,7 @@ def test_a_party_nobody_has_assessed_proposes_low_and_says_why(engine):
 def test_a_proposal_reads_an_assessment_as_it_stands():
     held = Assessment(entity_id="p1",
                       observations=seen("4.2(b)(v)", "4.2(b)(iv)"))
-    assert propose_for(held).band == MEDIUM
+    assert propose(held.observations).band == MEDIUM
 
 
 # -- what it must not do -----------------------------------------------------

@@ -20,7 +20,7 @@ not mine.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .calendar import BY_OBLIGATION, Calendar, Obligation
 from .citations import cite
@@ -32,7 +32,7 @@ from .disclosure import Book
 from .correspondence import Correspondence
 from .documents import Papers
 from .duplicates import Resemblances, look
-from .model import EntityKind, Event, EventType, Finding, Severity
+from .model import EntityKind, Event, EventType, Finding, Relation, Severity
 
 #: Stamped into every finding the pack produces. Bump on any change to a
 #: policy, a severity, a dedupe key or the clause register: findings are
@@ -73,6 +73,14 @@ class PolicyContext:
     #: What the book holds, for a reported figure to be read
     #: against.
     book: Book = field(default_factory=Book)
+    #: Risk assessments by customer. Added so a policy can tell a fact
+    #: recorded *during* diligence from the same fact arriving after it was
+    #: finished -- the difference between onboarding and re-KYC, which no
+    #: property of the event itself can express. A projection like every
+    #: other field here, so policies stay pure over recorded facts.
+    #: Confidential under clause 4.1(d): a finding may act on a category but
+    #: must not put one on anything a customer could see.
+    risk: Mapping[str, Any] = field(default_factory=dict)
 
 
 Policy = Callable[[PolicyContext], Iterable[Finding]]
@@ -441,6 +449,99 @@ def offices_must_be_filled(ctx: PolicyContext) -> Iterable[Finding]:
             )
         )
     return findings
+
+
+#: How the interest is held -> the limb of 1.3.3 that names whose identity
+#: must be established. The ownership limb reads "more than 10%"; the trust
+#: limb reads "10% or more" and additionally catches the author and trustee
+#: at any percentage at all.
+_BENEFICIAL_OWNER_LIMB = {
+    Relation.OWNS.value: "1.3.3(a)",
+    Relation.TRUSTEE_OF.value: "1.3.3(d)",
+    Relation.SETTLOR_OF.value: "1.3.3(d)",
+    Relation.BENEFICIARY_OF.value: "1.3.3(d)",
+}
+
+
+def ownership_changed_after_diligence(ctx: PolicyContext) -> Iterable[Finding]:
+    """Who owns this customer changed after the firm finished checking them.
+
+    Clause 5.11 has two halves and only one of them is a calendar. The other
+    is that diligence must be refreshed when something happens that makes
+    what the firm holds no longer true, and a change of beneficial ownership
+    is the clearest instance: a customer whose owners have changed is, in
+    AML terms, a different customer. The identification done at onboarding
+    was of people who may no longer be there, and the risk category was set
+    against a structure that no longer exists.
+
+    Nothing catches this today. ``ubo_must_be_identified`` asks whether the
+    owners are known and ``ownership_cycle`` whether the chain terminates;
+    both are equally happy on day one and on day nine hundred. The periodic
+    sweep will find this customer eventually -- in up to five years, if they
+    are rated low risk.
+
+    The test for "after" is a settled risk assessment older than this event.
+    That is the recorded moment the firm said it had finished looking, and
+    it is why ``risk`` is on the context at all: no property of the
+    ownership event itself can distinguish a declaration made during
+    onboarding from one made two years later, and treating the first as a
+    trigger would fire on every party the moment they were entered.
+
+    Deliberately not extended to sanctions, PEP or adverse-media findings.
+    Each of those already opens its own file, at its own severity, citing
+    the clause that governs it. Adding a second, quieter file saying "and
+    also refresh the diligence" would split one matter across two records
+    and make the queue longer without making it more informative.
+    """
+    if ctx.event.event_type is not EventType.OWNERSHIP_DECLARED:
+        return ()
+    payload = ctx.event.payload
+    owned = str(payload.get("owned") or "")
+    assessment = ctx.risk.get(owned)
+    if assessment is None or not getattr(assessment, "settled", False):
+        return ()
+    # Recorded on the same day the diligence was settled is onboarding, not a
+    # change to it. Only a strictly later date is a new fact about a customer
+    # the firm had already finished with.
+    if str(ctx.event.occurred_at)[:10] <= str(assessment.on)[:10]:
+        return ()
+
+    owner = str(payload.get("owner") or "")
+    entity = ctx.graph.entities.get(owned)
+    who = ctx.graph.entities.get(owner)
+    category = str(getattr(assessment, "category", "")).upper()
+    return (
+        Finding(
+            policy_id="POL_OWNERSHIP_CHANGED_AFTER_DILIGENCE",
+            case_type=CASE_REVIEW,
+            severity=Severity.HIGH if category == "HIGH" else Severity.MEDIUM,
+            summary=(
+                f"{getattr(entity, 'name', None) or owned} was checked and "
+                f"categorised on {assessment.on}, and its ownership has "
+                f"changed since: "
+                f"{getattr(who, 'name', None) or owner} was declared as "
+                f"holding {payload.get('percentage')}%"
+            ),
+            dedupe_key=f"{owned}|{assessment.on}",
+            detail={
+                "party": owned,
+                "owner": owner,
+                "percentage": payload.get("percentage"),
+                "relation": payload.get("relation"),
+                "assessed_on": assessment.on,
+                "category": category,
+                "declared_on": str(ctx.event.occurred_at)[:10],
+            },
+            # The limb that names who has to be identified depends on how
+            # the interest is held: 1.3.3(a) is the ownership limb, 1.3.3(d)
+            # the one for trusts, and they set different thresholds. Citing
+            # a bare "1.3.3" would point an officer at a clause with four
+            # limbs and let them pick -- which is the part of this rule
+            # firms get wrong.
+            citations=cite("5.11", _BENEFICIAL_OWNER_LIMB.get(
+                str(payload.get("relation") or ""), "1.3.3(a)")),
+        ),
+    )
 
 
 def review_overdue(ctx: PolicyContext) -> Iterable[Finding]:
@@ -930,6 +1031,7 @@ POLICIES: Sequence[Policy] = (
     offices_must_be_filled,
     filing_overdue,
     review_overdue,
+    ownership_changed_after_diligence,
 )
 
 

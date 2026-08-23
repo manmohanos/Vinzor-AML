@@ -210,16 +210,3 @@ def propose(observations: Mapping[str, Observation]) -> Proposal:
         weighed=sum(1 for ref in WEIGHTS if answered(ref)),
         weighable=len(WEIGHTS),
     )
-
-
-def propose_for(assessment: Optional[Assessment]) -> Proposal:
-    """The proposal for an assessment as it currently stands.
-
-    An entity nobody has looked at yet gets a proposal built from nothing:
-    zero points, every factor unassessed, and ``thin`` true. That is
-    deliberately not an error -- zero points is what the arithmetic says of
-    no evidence -- but a screen that rendered it as "low" would be reporting
-    an unexamined customer as a clean one, so ``thin`` is what the wording
-    keys off and the band is not shown alone.
-    """
-    return propose(assessment.observations if assessment else {})

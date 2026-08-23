@@ -1933,6 +1933,8 @@ GROUP_TITLE = {
     "POL_OFFICE_NOT_BASED_IN_IFSC":
         "{n} required {post} {has} someone not based in GIFT City",
     "POL_REVIEW_OVERDUE": "{n} {customer} overdue for review",
+    "POL_OWNERSHIP_CHANGED_AFTER_DILIGENCE":
+        "{n} {customer} changed hands since {were} checked",
     "POL_FILING_OVERDUE": "{n} {filing} overdue with IFSCA",
     "POL_FILING_REPEATEDLY_LATE":
         "{n} {filing} overdue — this is not the first",
@@ -2129,6 +2131,15 @@ GROUP_BECAUSE = {
         "a warning to a fund management entity whose principal officer and "
         "key managerial personnel were absent on four such visits.",
     ),
+    "POL_OWNERSHIP_CHANGED_AFTER_DILIGENCE": (
+        "The ownership of each of these customers has changed since you "
+        "finished checking them and set their risk category.",
+        "A customer whose owners have changed is, for anti-money-laundering "
+        "purposes, a different customer: the people you identified may no "
+        "longer be there, and the category you set was against a structure "
+        "that has since moved. Waiting for the scheduled review can mean "
+        "waiting up to five years.",
+    ),
     "POL_REVIEW_OVERDUE": (
         "Each of these customers was due to have their due diligence looked "
         "at again, and has not been.",
@@ -2311,6 +2322,12 @@ GROUP_ACTIONS = {
         "appoint someone who is.",
         "Make sure the office is staffed and open during business hours — "
         "an inspection can happen on any working day.",
+    ),
+    "POL_OWNERSHIP_CHANGED_AFTER_DILIGENCE": (
+        "Identify whoever now holds more than 10% of the customer, and "
+        "confirm the people you identified before are still there.",
+        "Set the risk category again once you have. The structure it was "
+        "set against is not the structure the customer has now.",
     ),
     "POL_REVIEW_OVERDUE": (
         "Refresh what you hold on the customer — identification, ownership, "
