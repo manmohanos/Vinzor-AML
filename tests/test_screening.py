@@ -22,6 +22,11 @@ from vinzor.screening import (
 
 from conftest import WHEN, company, person
 
+#: What the fake service says it holds. A real yente publishes a dated
+#: version per dataset; the only thing that matters here is that it is a
+#: value a screening record can be checked against later.
+FAKE_VERSION = "20260823-abc"
+
 
 def service(*results):
     """A fake yente answering every query it is asked.
@@ -47,7 +52,8 @@ def service(*results):
             # indexes into it. A housekeeping GET is not a question.
             catalogue.append(url)
             return json.dumps({"datasets": [
-                {"name": "default", "index_current": True},
+                {"name": "default", "index_current": True,
+                 "version": FAKE_VERSION},
             ]}).encode()
         sent = json.loads(body)
         calls.append({"url": url, "body": sent, "headers": dict(headers)})
@@ -739,17 +745,70 @@ def test_a_service_that_cannot_say_what_it_holds_is_refused(engine):
     assert "could not confirm" in str(refusal.value)
 
 
-def test_the_catalogue_is_not_read_when_something_matched(engine):
-    """A book with matches in it pays nothing for this guard: the question
-    is only asked where the answer could be wrong."""
+def _a_hit():
+    return {"id": "ofac-1", "caption": "Rohan Desai", "score": 0.95,
+            "match": True, "properties": {"topics": ["sanction"]},
+            "datasets": ["us_ofac_sdn"]}
+
+
+def test_the_guard_still_does_not_run_when_something_matched(engine):
+    """A book with matches in it pays nothing for the *guard*: the question
+    "is this scope even loaded" is only asked where the answer could be
+    wrong, which is when nothing came back.
+
+    The catalogue is now read on this path anyway, for a different question
+    -- which version of the list this was checked against -- so the original
+    form of this test (assert it is never read at all) no longer says what
+    it meant. What it meant is preserved here: a stale index does not refuse
+    a screen that found something, because a hit is evidence the index
+    answered.
+    """
     person(engine, "p1", "Rohan Desai")
-    transport, _calls = service({"id": "ofac-1", "caption": "Rohan Desai",
-                                 "score": 0.95, "match": True,
-                                 "properties": {"topics": ["sanction"]},
-                                 "datasets": ["us_ofac_sdn"]})
+    transport, _calls = service(_a_hit())
+
+    def stale(url, body, headers):
+        if body is None:
+            return json.dumps({"datasets": [
+                {"name": "default", "index_current": False,
+                 "version": FAKE_VERSION},
+            ]}).encode()
+        return transport(url, body, headers)
+
+    # No refusal, despite the index reporting itself out of date.
+    results = screen(engine, "p1", screened_at=WHEN,
+                     client=WatchlistClient(transport=stale))
+    assert results, "a match was refused on a guard that should not have run"
+
+
+def test_a_screen_records_which_version_of_the_list_it_saw(engine):
+    """The question a re-screen exists to ask is whether the list has moved
+    since this party was last looked at, and a record that does not say
+    which version it saw cannot answer it."""
+    person(engine, "p1", "Rohan Desai")
+    transport, _calls = service(_a_hit())
     screen(engine, "p1", screened_at=WHEN,
            client=WatchlistClient(transport=transport))
-    assert transport.catalogue == [], "asked what it holds despite a match"
+
+    seen = [e for e in engine.log
+            if e.event_type is EventType.SCREENING_COMPLETED]
+    assert seen[-1].payload["basis"]["list_version"] == FAKE_VERSION
+    assert transport.catalogue, "never asked what version it holds"
+
+
+def test_a_version_already_known_is_not_asked_for_again(engine):
+    """A whole-book re-screen asks once and tells every screen the answer.
+    Asking per party would be several hundred fetches of the same catalogue
+    for one fact that does not change during a run."""
+    person(engine, "p1", "Rohan Desai")
+    transport, _calls = service(_a_hit())
+    screen(engine, "p1", screened_at=WHEN,
+           client=WatchlistClient(transport=transport),
+           list_version="20260101")
+
+    assert transport.catalogue == [], "asked despite being told"
+    seen = [e for e in engine.log
+            if e.event_type is EventType.SCREENING_COMPLETED]
+    assert seen[-1].payload["basis"]["list_version"] == "20260101"
 
 
 def test_aliases_alone_do_not_claim_the_name_was_abbreviated(engine):

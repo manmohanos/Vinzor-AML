@@ -51,8 +51,10 @@ USAGE = """vinzor
                                  uses OpenSanctions/yente via
                                  VINZOR_SCREENING_URL / VINZOR_SCREENING_KEY /
                                  VINZOR_SCREENING_SCOPE; see selfhost/)
-  python -m vinzor rescreen     screen every investor in a workspace against
-                                the live watchlist, recording what matched
+  python -m vinzor rescreen     screen everyone whose screening is out of
+                                date against the live watchlist (--all for
+                                everyone, --limit N); meant for a nightly
+                                timer
   python -m vinzor readiness    check the client book against clause 5.4.2,
                                 which is what any KYC registration agency
                                 upload needs before it needs anything else
@@ -153,49 +155,79 @@ def _open(argv: list[str]):
 
 
 def _rescreen_cli(argv: list[str]) -> int:
-    """Screen everyone in the workspace, recording the watchlist detail.
+    """Screen everyone whose screening is out of date, and say who was not.
 
-    The synthetic dataset's alerts say *that* a name matched but not *what* it
-    matched -- no date of birth, no nationality, no list entry. That is enough
-    to open a file and not enough to review one. This replaces guesswork with a
-    real answer from the watchlist, on the record, with its provenance.
+    This is the whole-book sweep meant to run nightly on a timer. It is
+    deliberately not a scheduler: ``python -m vinzor rescreen`` on a cron
+    entry or a systemd timer is the schedule, and an application that grows
+    its own is an application with two of them.
+
+    By default it screens only what is due -- never screened, or screened
+    against a version of the watchlist the service no longer holds. That is
+    what makes it safe to run every night: a book that has already been
+    looked at against the current list costs one catalogue read and nothing
+    else. ``--all`` screens everyone regardless, which is what the synthetic
+    dataset needs the first time, since its seeded alerts say *that* a name
+    matched and not *what* it matched.
+
+    Matches an officer has already closed are not raised again -- see
+    ``rescreening.settled_alerts`` for why that is not merely tidiness.
     """
     import os
 
-    from .model import EntityKind
-    from .screening import (OFF_MACHINE_WARNING, ScreeningUnavailable,
-                        WatchlistClient, leaves_this_machine, screen)
+    from .rescreening import currency, overdue, rescreen
+    from .screening import (OFF_MACHINE_WARNING, WatchlistClient,
+                            leaves_this_machine)
 
     engine = _open(argv)
-    limit = _flag(argv, "--limit", 25)
     client = WatchlistClient(
         url=os.environ.get("VINZOR_SCREENING_URL", "https://api.opensanctions.org"),
         api_key=os.environ.get("VINZOR_SCREENING_KEY", ""),
         scope=os.environ.get("VINZOR_SCREENING_SCOPE", "default"),
     )
-    today = date.today().isoformat()
-    people = [e for e in engine.state.graph.entities.values()
-              if e.kind is EntityKind.PERSON][:limit]
-
-    print(f"  screening {len(people)} investors against {client.url}")
     if leaves_this_machine(client.url):
         from urllib.parse import urlparse
 
         print(OFF_MACHINE_WARNING.format(
             host=urlparse(client.url).hostname or client.url))
-    opened = 0
-    for entity in people:
-        try:
-            for result in screen(engine, entity.entity_id, screened_at=today,
-                                 client=client):
-                for case in result.cases:
-                    opened += 1
-                    print(f"  {case.severity.value:<8} {case.evidence[0].summary}")
-        except ScreeningUnavailable as exc:
-            print(f"  stopped: {exc}")
-            return 1
-    print(f"  {opened} file(s) opened or extended; every check is on the record.")
-    return 0
+
+    version = client.list_version()
+    if "--all" in argv:
+        due = [row.party for row in currency(engine)]
+        why = "every party"
+    else:
+        due = [row.party for row in overdue(engine, version)]
+        why = "out of date"
+    limit = _flag(argv, "--limit", 0)
+    if limit:
+        due = due[:limit]
+
+    held = version or "a version the service would not name"
+    print(f"  the watchlist holds {held}")
+    if not due:
+        print("  nothing is out of date; every party has been screened "
+              "against the list the service holds now.")
+        return 0
+
+    print(f"  screening {len(due)} ({why}) against {client.url}")
+    before = len(engine.log)
+    swept = rescreen(engine, today=date.today().isoformat(), client=client,
+                     parties=due)
+
+    opened = sum(1 for event in list(engine.log)[before:]
+                 if event.event_type.value == "CASE_OPENED")
+    print(f"  {swept.screened} screened, {opened} file(s) opened.")
+    for party, refused in swept.unreachable:
+        # Named, not counted. A party the service could not be asked about
+        # has not been screened, and a run that quietly totalled it with the
+        # rest would be reporting a check that did not happen as one that
+        # found nothing.
+        print(f"  NOT screened: {engine.state.graph.name_of(party)} -- {refused}")
+    intact, broken = engine.verify()
+    print("  chain " + ("verifies" if intact else f"BROKEN: {broken}"))
+    if not intact:
+        return 1
+    return 1 if swept.unreachable else 0
 
 
 def _assist_cli(argv: list[str]) -> int:
