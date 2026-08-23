@@ -4670,6 +4670,27 @@ def party(engine, entity_id: str, today=None) -> "Party":
 #: "overdue for re-screening" would therefore be inventing an obligation the
 #: regulator has not imposed -- so the page reports dates and declines to
 #: judge them. The interval is the firm's policy, and the firm has to set it.
+#: Said against a party checked before the newest list this workspace has
+#: been screened against. Deliberately not a judgement about *time* -- that
+#: is what SCREENING_INTERVAL_CAVEAT below declines to make, and it still
+#: declines to. This is a different and harder fact: the list itself has
+#: been replaced since, so somebody added to it in the meantime is somebody
+#: this party has never been checked against. A record saying "checked" is
+#: not wrong about the past and is no longer an answer about the present.
+OUT_OF_DATE_CHECK = (
+    "Checked against an older version of the watchlist. Anyone added since "
+    "has not been checked against this party."
+)
+
+#: The summary line, where any are behind. Says what it can speak for: the
+#: newest list this workspace has seen, which is not necessarily the newest
+#: the service holds -- nothing here can know that until a sweep runs.
+OUT_OF_DATE_SUMMARY = (
+    "{n} of these {were} checked against an older version of the watchlist "
+    "than the newest this workspace has screened against. Running the sweep "
+    "again checks them against the current list."
+)
+
 SCREENING_INTERVAL_CAVEAT = (
     "Clause 5.9 requires screening to be ongoing, but it does not say how "
     "often. This page reports when each party was last checked and does not "
@@ -4701,6 +4722,11 @@ class Check:
     tone: str
     #: A machine address: which party page this row leads to.
     ref: str
+    #: Said only where this party was checked against a list this workspace
+    #: has since moved past. Empty is the ordinary case and shows nothing --
+    #: a row that had to explain itself every time would train an officer to
+    #: stop reading the column.
+    currency: str = ""
 
 
 @dataclass(frozen=True)
@@ -4730,7 +4756,11 @@ class Screening:
     checked_heading: str
     checked: tuple
     checked_none: str
-    back: str
+    #: Empty when every check on record was made against the newest list this
+    #: workspace has screened against. A firm that has just run the sweep
+    #: should see nothing here, and seeing nothing should mean something.
+    out_of_date: str = ""
+    back: str = ""
 
 
 def _latest_screenings(engine) -> dict:
@@ -4746,13 +4776,20 @@ def _latest_screenings(engine) -> dict:
             continue
         payload = event.payload or {}
         record = latest.setdefault(
-            event.subject, {"when": "", "matches": 0, "checks": 0}
+            event.subject,
+            {"when": "", "matches": 0, "checks": 0, "version": ""},
         )
         record["checks"] += 1
         if payload.get("matched"):
             record["matches"] += 1
         if event.occurred_at > record["when"]:
             record["when"] = event.occurred_at
+        # Taken from the last screening in log order rather than the latest
+        # by date: two screens on one day are ordered by the log and by
+        # nothing else, and the version that matters is whichever was
+        # written most recently.
+        record["version"] = str(
+            (payload.get("basis") or {}).get("list_version") or "")
     return latest
 
 
@@ -4810,6 +4847,9 @@ def screening(engine, today=None, per_list: int = 12) -> "Screening":
     })
     latest = _latest_screenings(engine)
     shared = shared_names(graph)
+    from .rescreening import newest_version
+
+    newest = newest_version(engine)
 
     def check_for(entity_id: str):
         """(sort key, Check). The key is the ISO date, never the shown one:
@@ -4827,9 +4867,11 @@ def screening(engine, today=None, per_list: int = 12) -> "Screening":
             tone = "today"
         else:
             found, tone = NOTHING_FOUND, "settled"
+        behind = bool(newest) and record.get("version", "") != newest
         return record["when"], Check(
             who=qualified_name(graph, entity_id, shared), kind=kind,
-            when=_date(record["when"]), result=found, tone=tone, ref=entity_id)
+            when=_date(record["when"]), result=found, tone=tone, ref=entity_id,
+            currency=OUT_OF_DATE_CHECK if behind else "")
 
     checks = [check_for(entity_id) for entity_id in customers]
     unchecked = [check for _, check in checks if check.result == NO_CHECK]
@@ -4859,6 +4901,13 @@ def screening(engine, today=None, per_list: int = 12) -> "Screening":
         )
         tone = "settled"
 
+    behind = sum(1 for check in checked if check.currency)
+    out_of_date = (
+        OUT_OF_DATE_SUMMARY.format(n=behind,
+                                   were=_plural(behind, "was", "were"))
+        if behind else ""
+    )
+
     clause = CLAUSES.get("5.9")
     hidden = max(0, len(unchecked) - per_list)
     return Screening(
@@ -4870,6 +4919,7 @@ def screening(engine, today=None, per_list: int = 12) -> "Screening":
         rule_says=(PLAIN_RULES.get("5.9", clause.heading) if clause else ""),
         rule_clause=(f"Clause {clause.clause_id}" if clause else ""),
         rule_caveat=SCREENING_INTERVAL_CAVEAT,
+        out_of_date=out_of_date,
         link=(DOCUMENTS[clause.doc_id].url if clause else ""),
         unchecked_heading="Nobody has checked these",
         unchecked=tuple(unchecked[:per_list]),

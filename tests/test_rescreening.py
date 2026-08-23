@@ -304,3 +304,104 @@ def test_rescreening_writes_the_version_it_screened_against(engine):
             if e.event_type is EventType.SCREENING_COMPLETED][-1]
     assert last.payload["basis"]["list_version"] == VERSION_TWO
     assert overdue(engine, VERSION_TWO) == (), "still overdue after a screen"
+
+
+# -- what an officer and a regulator actually see -----------------------------
+
+
+def test_the_newest_list_is_read_from_the_log_not_the_network(engine):
+    """A page that reaches the watchlist to render is a page that fails when
+    the watchlist does."""
+    from vinzor.rescreening import newest_version
+
+    person(engine, "p1", "Rohan Desai")
+    assert newest_version(engine) == UNKNOWN_VERSION
+
+    screen(engine, "p1", screened_at=WHEN,
+           client=WatchlistClient(transport=service(version=VERSION_ONE)))
+    assert newest_version(engine) == VERSION_ONE
+
+    person(engine, "p2", "Anita Rao")
+    screen(engine, "p2", screened_at=LATER,
+           client=WatchlistClient(transport=service(version=VERSION_TWO)))
+    assert newest_version(engine) == VERSION_TWO, (
+        "the newest list seen is whichever was recorded most recently")
+
+
+def test_a_record_says_when_its_check_predates_the_newest_list(engine):
+    """The sentence a regulator reads. "Checked, and nothing was found" is
+    true of the day it was written and says less every day after it."""
+    from vinzor.dossier import dossier
+
+    person(engine, "p1", "Rohan Desai")
+    screen(engine, "p1", screened_at=WHEN,
+           client=WatchlistClient(transport=service(version=VERSION_ONE)))
+
+    paper = dossier(engine, "p1", LATER, record=False)
+    checked = [part for part in paper.parts if "checked against" in part.heading][0]
+    assert "older version" not in checked.tail, (
+        "nothing has moved on yet; this should not warn")
+
+    # Somebody else is screened against a newer list. Now p1 is behind.
+    person(engine, "p2", "Anita Rao")
+    screen(engine, "p2", screened_at=LATER,
+           client=WatchlistClient(transport=service(version=VERSION_TWO)))
+
+    paper = dossier(engine, "p1", LATER, record=False)
+    checked = [part for part in paper.parts if "checked against" in part.heading][0]
+    assert "older version" in checked.tail
+    assert "has not been checked against this party" in checked.tail
+
+
+def test_a_record_with_no_version_at_all_claims_nothing_either_way(engine):
+    """A workspace that has never swept has no versions recorded anywhere.
+    Warning on every document there would be noise, not honesty."""
+    from vinzor.dossier import dossier
+
+    person(engine, "p1", "Rohan Desai")
+    engine.ingest(event_type=EventType.SCREENING_COMPLETED, subject="p1",
+                  occurred_at=WHEN, actor="system",
+                  payload={"matched": False, "basis": {}})
+
+    paper = dossier(engine, "p1", LATER, record=False)
+    checked = [part for part in paper.parts if "checked against" in part.heading][0]
+    assert checked.tail == "", "warned with nothing to compare against"
+
+
+def test_the_coverage_page_counts_who_is_behind(engine):
+    from vinzor.briefing import screening as coverage
+
+    person(engine, "p1", "Rohan Desai")
+    person(engine, "p2", "Anita Rao")
+    for party in ("p1", "p2"):
+        engine.ingest(event_type=EventType.COMMITMENT_MADE, subject="f1",
+                      occurred_at=WHEN,
+                      payload={"investor": party, "fund": "f1",
+                               "amount": 1000, "currency": "USD"})
+
+    screen(engine, "p1", screened_at=WHEN,
+           client=WatchlistClient(transport=service(version=VERSION_ONE)))
+    screen(engine, "p2", screened_at=LATER,
+           client=WatchlistClient(transport=service(version=VERSION_TWO)))
+
+    page = coverage(engine)
+    behind = [check for check in page.checked if check.currency]
+    assert [check.ref for check in behind] == ["p1"]
+    assert "1 of these was checked against an older version" in page.out_of_date
+
+
+def test_the_coverage_page_says_nothing_when_the_book_is_current(engine):
+    """Seeing nothing here should mean something."""
+    from vinzor.briefing import screening as coverage
+
+    person(engine, "p1", "Rohan Desai")
+    engine.ingest(event_type=EventType.COMMITMENT_MADE, subject="f1",
+                  occurred_at=WHEN,
+                  payload={"investor": "p1", "fund": "f1",
+                           "amount": 1000, "currency": "USD"})
+    screen(engine, "p1", screened_at=WHEN,
+           client=WatchlistClient(transport=service(version=VERSION_ONE)))
+
+    page = coverage(engine)
+    assert page.out_of_date == ""
+    assert all(not check.currency for check in page.checked)

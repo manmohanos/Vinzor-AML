@@ -126,6 +126,34 @@ def currency(engine) -> tuple[Currency, ...]:
     return tuple(out)
 
 
+def newest_version(engine) -> str:
+    """The most recent watchlist version this workspace has ever seen.
+
+    Read off the log rather than asked of the service, because the screens
+    that read this are read-side folds and a page that reaches the network
+    to render is a page that fails when the network does.
+
+    What it can say is therefore bounded, and the wording that shows it says
+    so: this is the newest list *this workspace has been screened against*,
+    not necessarily the newest the service holds. If the service has moved on
+    and no sweep has run since, nothing here knows that yet -- which is an
+    argument for running the sweep, not for guessing on a screen.
+
+    Latest by position in the log, not by sorting the strings. A version is
+    whatever the service chose to call itself, and ordering opaque labels
+    alphabetically is how "v9" comes after "v10".
+    """
+    seen = UNKNOWN_VERSION
+    for event in engine.log:
+        if event.event_type is not EventType.SCREENING_COMPLETED:
+            continue
+        version = str((event.payload.get("basis") or {}).get("list_version")
+                      or UNKNOWN_VERSION)
+        if version:
+            seen = version
+    return seen
+
+
 def overdue(engine, current_version: str) -> tuple[Currency, ...]:
     """Every party due to be screened again, never-screened ones first."""
     return tuple(row for row in currency(engine)
