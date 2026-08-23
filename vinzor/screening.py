@@ -348,6 +348,39 @@ class WatchlistClient:
     threshold: float = DEFAULT_THRESHOLD
     transport: Transport = field(default=_http_transport)
 
+    def list_version(self) -> str:
+        """Which version of the watchlist this service currently holds.
+
+        The same ``/catalog`` the guard below reads, asked for a different
+        reason: not "is this scope loaded" but "loaded as of when". A
+        screening record that does not say which version of the list it was
+        checked against cannot answer the question a re-screen exists to ask
+        -- *has the list moved since we last looked at this party* -- so
+        every screen carries it from here on.
+
+        Returns "" rather than raising when the service cannot say. An
+        unknown version is not an error at this boundary: it is a screening
+        whose currency cannot be established, and ``rescreening.py`` reads
+        it as exactly that -- due to be looked at again. Refusing here
+        instead would turn a service that is merely reticent about its
+        catalog into one that cannot screen at all, which is a worse trade
+        than a party re-screened more often than it needed to be.
+        """
+        try:
+            raw = self.transport(f"{self.url}/catalog", None,
+                                 {"Accept": "application/json"})
+            held = json.loads(raw).get("datasets")
+            if not isinstance(held, list):
+                return ""
+        except Exception:               # noqa: BLE001 - unknown, not fatal
+            return ""
+        for dataset in held:
+            if not isinstance(dataset, Mapping):
+                continue
+            if str(dataset.get("name") or "") == self.scope:
+                return str(dataset.get("version") or "")
+        return ""
+
     def _refuse_unless_indexed(self) -> None:
         """Confirm the scope we just searched is actually in the index.
 
@@ -627,14 +660,36 @@ def screen(
     *,
     screened_at: str,
     client: WatchlistClient,
+    list_version: Optional[str] = None,
+    settled: Sequence[str] = (),
 ) -> list[IngestResult]:
     """Screen one known entity and record what the watchlists said.
 
     Every outcome becomes a fact. A qualifying hit mints a matched
     ``SCREENING_COMPLETED`` whose alert id is stable per watchlist entity —
-    re-screening the same real-world match extends the same Case rather than
-    opening a duplicate. No hits at all mints an unmatched event: the proof,
-    for clause 5.9, that the check was performed that day.
+    re-screening the same real-world match extends the same *open* Case
+    rather than opening a duplicate. No hits at all mints an unmatched
+    event: the proof, for clause 5.9, that the check was performed that day.
+
+    ``list_version`` is which version of the watchlist this screen was
+    checked against, recorded so a later run can tell a current screening
+    from a stale one. Left out, it is asked of the service — one extra call,
+    and only on the path where a hit was found, since the empty path already
+    reads the catalog for the guard below. A whole-book re-screen passes it
+    in once instead of asking several hundred times for the same answer.
+
+    ``settled`` names watchlist entities this firm has already adjudicated
+    for this party — a match somebody looked at and closed. Those are not
+    minted again, and the reason is not tidiness. A closed Case that meets
+    the same finding does not reopen as more evidence; it reopens as a *new*
+    Case (see ``cases._reopened_case_id``, and the reasoning above it, which
+    is right for a breach that genuinely recurs). A watchlist match is not a
+    recurrence. It is one standing fact about the world, observed again — so
+    a nightly re-screen left to itself would hand back every false positive
+    an officer has ever dismissed, every night, for as long as the party is
+    on the book. The check still runs and the record still says what it saw;
+    what it does not do is ask a second time a question somebody already
+    answered.
     """
     entity = engine.state.graph.entities.get(entity_id)
     if entity is None:
@@ -651,8 +706,21 @@ def screen(
                                     country=country,
                                     aliases=other_names(entity))
 
+    version = client.list_version() if list_version is None else list_version
+    provenance["list_version"] = version
+
+    already = frozenset(settled)
+    raised = [hit for hit in hits if f"os:{hit.entity_id}" not in already]
+    held_back = [f"os:{hit.entity_id}" for hit in hits
+                 if f"os:{hit.entity_id}" in already]
+    if held_back:
+        # On the record, and named. A screen that quietly declined to
+        # mention what it saw would be the same defect as one that reported
+        # a failed check as a clean one, wearing better clothes.
+        provenance["settled_already"] = held_back
+
     results: list[IngestResult] = []
-    for hit in hits:
+    for hit in raised:
         results.append(engine.ingest(
             event_type=EventType.SCREENING_COMPLETED,
             subject=entity_id,
@@ -678,7 +746,13 @@ def screen(
                 },
             },
         ))
-    if not hits:
+    if not raised:
+        # Reached either because nothing matched, or because everything that
+        # matched had already been settled. Both are "nothing new today",
+        # and both need the event: it is the proof under clause 5.9 that the
+        # check was performed. Which of the two it was is in the basis --
+        # ``settled_already`` naming the entities held back, absent entirely
+        # when the search was genuinely empty.
         results.append(engine.ingest(
             event_type=EventType.SCREENING_COMPLETED,
             subject=entity_id,

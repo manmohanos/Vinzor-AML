@@ -31,6 +31,30 @@ Sources, all primary:
   costs **USD 100 for every month or part thereof, for each instance**, and
   paying it is "without prejudice to any other action" the Authority may take.
   Karvy paid with its registration.
+* **FIU-IND registration** — circulars of 14 March 2024
+  (F. No. 886/IFSCA/FATF-C/Coordination/2023-24) and 25 February 2025
+  (F. No. IFSCA/2/2025-AMLCFT/01): every Regulated Entity registers on
+  FINGate 2.0 **before commencing business**, and non-compliance "shall be
+  treated as a breach of the terms and conditions of registration or licence".
+  One obligation, once, and a licence is out of condition every day it goes
+  undone — so it is due the day the licence is granted, or the day the 2024
+  circular issued for a licence older than the mandate.
+* **NISM-IFSCA-01 certification** — circular of 17 November 2025
+  (e.F. No. IFSCA-DAC/8/2024-AMLCFT): mandatory for the Principal Officer,
+  within **four months**. Read here as four months from appointment or from
+  the circular, whichever ends later — an officer appointed before the
+  mandate existed cannot have owed it earlier than the mandate did. The
+  certificate is personal, so the obligation follows the holder: a new
+  Principal Officer starts a new four-month clock, and a vacated one takes
+  their instance with them.
+
+**What is deliberately not here.** The monthly 15th-of-the-month reports to
+FIU-IND (CTR and the rest, PML Rules rule 8(1)) are due only for the reportable
+transactions of rule 3, and this workspace does not yet hold the transaction
+feeds that would say whether any occurred. A tracker that showed "CTR overdue"
+to a firm that had no reportable transactions would be inventing a breach —
+the same defect as reporting an unrun check as clean, pointed the other way.
+Those rows arrive when the data that makes them true or false does.
 """
 
 from __future__ import annotations
@@ -57,11 +81,22 @@ LATE_CHARGE_USD_PER_MONTH = 100
 #: a regulatory one -- there is no "warning period" in the circular.
 DUE_SOON_DAYS = 7
 
+#: The day FINGate registration became a condition of every licence
+#: (circular of 14 March 2024). A licence granted before this owes the
+#: registration from this day; one granted after owes it from the grant.
+FINGATE_MANDATED_ON = "2024-03-14"
+
+#: The day the NISM-IFSCA-01 requirement issued, and the window it allows.
+NISM_MANDATED_ON = "2025-11-17"
+NISM_GRACE_MONTHS = 4
+
 
 class Obligation(StrEnum):
     QUARTERLY_REPORT = "QUARTERLY_REPORT"
     FLAT_RECURRING_FEE = "FLAT_RECURRING_FEE"
     CONDITIONAL_RECURRING_FEE = "CONDITIONAL_RECURRING_FEE"
+    FINGATE_REGISTRATION = "FINGATE_REGISTRATION"
+    NISM_CERTIFICATION = "NISM_CERTIFICATION"
 
 
 class Status(StrEnum):
@@ -141,6 +176,29 @@ SCHEDULES: Sequence[Schedule] = (
                   "year's turnover and payable by 30 April.",
         late_charge=False,
         verb="paid",
+    ),
+    Schedule(
+        obligation=Obligation.FINGATE_REGISTRATION,
+        label="FIU-IND FINGate 2.0 registration",
+        quarterly=False,
+        clause="10.3",
+        authority="Circulars of 14 March 2024 and 25 February 2025: every "
+                  "Regulated Entity registers on FINGate 2.0 before "
+                  "commencing business, and non-compliance is a breach of "
+                  "the conditions of the licence itself.",
+        late_charge=False,
+        verb="done",
+    ),
+    Schedule(
+        obligation=Obligation.NISM_CERTIFICATION,
+        label="NISM-IFSCA-01 certification",
+        quarterly=False,
+        clause="10.3",
+        authority="Circular of 17 November 2025: mandatory for the Principal "
+                  "Officer within four months of appointment or of the "
+                  "circular, whichever is later.",
+        late_charge=False,
+        verb="done",
     ),
 )
 
@@ -226,16 +284,54 @@ def _quarter_ends(start: date, until: date) -> Iterable[date]:
 
 
 def instances(
-    granted_on: str, today: str, submitted: Optional[Mapping[str, str]] = None
+    granted_on: str, today: str, submitted: Optional[Mapping[str, str]] = None,
+    officers: Sequence[tuple] = (),
 ) -> list[Instance]:
     """Every obligation instance between the grant of the licence and ``today``.
 
     Derived, never stored. ``submitted`` maps an instance key to the date it
-    was filed.
+    was filed. ``officers`` is (person, appointed_on) for whoever currently
+    holds the Principal Officer seat -- passed in rather than read here,
+    because this module computes from dates and takes no engine, and the one
+    caller that knows the officers is the one that holds the licence.
     """
     submitted = submitted or {}
     start, now = _d(granted_on), _d(today)
     found: list[Instance] = []
+
+    # One registration, once, for the licence itself. Due the day the grant
+    # made it a condition, or the day the mandate issued for a licence that
+    # predates it. The period names the licence rather than a quarter,
+    # because there is no period: a firm is registered with FIU-IND or its
+    # licence is out of condition.
+    fingate_due = max(start, _d(FINGATE_MANDATED_ON))
+    item = Instance(
+        obligation=Obligation.FINGATE_REGISTRATION,
+        period="this licence",
+        period_end=fingate_due.isoformat(),
+        due_on=fingate_due.isoformat(),
+    )
+    found.append(
+        Instance(**{**item.__dict__, "submitted_on": submitted.get(item.key)})
+    )
+
+    # One certification per current Principal Officer, keyed by name: the
+    # certificate is personal, so a new holder starts a new clock and a
+    # vacated one takes their instance with them. Four months from the later
+    # of the appointment and the mandate -- an officer appointed before the
+    # requirement existed cannot have owed it before it did.
+    for person, appointed_on in officers:
+        clock_starts = max(_d(str(appointed_on)), _d(NISM_MANDATED_ON))
+        item = Instance(
+            obligation=Obligation.NISM_CERTIFICATION,
+            period=str(person),
+            period_end=clock_starts.isoformat(),
+            due_on=_add_months(clock_starts, NISM_GRACE_MONTHS).isoformat(),
+        )
+        found.append(
+            Instance(**{**item.__dict__,
+                        "submitted_on": submitted.get(item.key)})
+        )
 
     for end in sorted(set(_quarter_ends(start, now))):
         due = end + timedelta(days=QUARTERLY_REPORT_DAYS)
@@ -270,16 +366,19 @@ def instances(
 
 
 def outstanding(
-    granted_on: str, today: str, submitted: Optional[Mapping[str, str]] = None
+    granted_on: str, today: str, submitted: Optional[Mapping[str, str]] = None,
+    officers: Sequence[tuple] = (),
 ) -> list[Instance]:
     """Everything not filed, oldest deadline first."""
-    return [i for i in instances(granted_on, today, submitted) if not i.submitted_on]
+    return [i for i in instances(granted_on, today, submitted, officers)
+            if not i.submitted_on]
 
 
 def overdue(
-    granted_on: str, today: str, submitted: Optional[Mapping[str, str]] = None
+    granted_on: str, today: str, submitted: Optional[Mapping[str, str]] = None,
+    officers: Sequence[tuple] = (),
 ) -> list[Instance]:
-    return [i for i in outstanding(granted_on, today, submitted)
+    return [i for i in outstanding(granted_on, today, submitted, officers)
             if i.status(today) is Status.OVERDUE]
 
 

@@ -151,6 +151,20 @@ class Gap:
     due_by: Optional[str] = None
 
 
+def principal_officers(licence) -> tuple:
+    """(person, appointed_on) for the current Principal Officer seat.
+
+    The shape ``calendar.instances`` takes for the NISM clock. A tuple of at
+    most one today, but shaped as a sequence because the obligation is per
+    holder, not per seat -- if a second certified post ever joins the
+    mandate, the callers do not change.
+    """
+    holder = licence.holders.get(Office.PRINCIPAL_OFFICER)
+    if holder is None:
+        return ()
+    return ((holder.person, holder.since),)
+
+
 class Licence:
     """The entity's registration, its offices and what it has been doing.
 

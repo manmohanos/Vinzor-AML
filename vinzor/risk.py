@@ -413,6 +413,18 @@ def _add_years(iso: str, years: int) -> str:
     return f"{year:04d}-{month:02d}-{day:02d}"
 
 
+def days_late(due_on: str, today: str) -> int:
+    """How long a review has been owed. Never negative -- a date that has not
+    arrived is not lateness of zero days, it is not lateness at all, and the
+    callers of this only ask about instances already past."""
+    from datetime import date
+
+    def _d(iso: str) -> date:
+        return date(*(int(part) for part in str(iso)[:10].split("-")))
+
+    return max(0, (_d(today) - _d(due_on)).days)
+
+
 def next_review(category: str, since: str, *, in_financial_group: bool = False,
                 group_category: str = "") -> Optional[Due]:
     """When this customer's diligence must next be refreshed.

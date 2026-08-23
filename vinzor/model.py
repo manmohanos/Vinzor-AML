@@ -142,6 +142,12 @@ class EventType(StrEnum):
     # factors "may not always indicate a high risk", so the category is a
     # judgement somebody made and must be attributable to them.
     RISK_ASSESSED = "RISK_ASSESSED"
+    #: A customer whose diligence was due to be refreshed under clause 5.11
+    #: and has not been. Observed at a boundary, like FILING_OVERDUE and for
+    #: the same reason: nothing happens when a review date passes. The whole
+    #: difficulty of periodic review is that the breach is silence, so the
+    #: date has to be looked for rather than waited for.
+    REVIEW_OVERDUE = "REVIEW_OVERDUE"
 
     # What the assistant suggested. A fact about the system, recorded like
     # any other -- so an inspector can see what was put in front of the

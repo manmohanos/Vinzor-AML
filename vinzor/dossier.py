@@ -460,14 +460,60 @@ def _checked(engine, entity_id: str, events) -> Part:
             tone="rule" if matched else "fact"))
 
     hits = sum(1 for event in checks if (event.payload or {}).get("matched"))
+    said = []
+    if hits:
+        said.append("A possible match is not a finding of wrongdoing. It is "
+                    "a name that resembles a listed name closely enough that "
+                    "a person had to look.")
+    # "Checked, and nothing was found" is true of the day it was written and
+    # says less every day after it. The watchlist is rebuilt continuously, so
+    # a check made against a list this workspace has since moved past did not
+    # look at anybody added in between -- and a record that reads as a clean
+    # answer about today, when it is an answer about April, is the same defect
+    # this system refuses everywhere else, wearing time as a disguise.
+    behind = _behind_the_newest_list(engine, checks)
+    if behind:
+        said.append(behind)
     return Part(
         heading="What this party has been checked against",
         lead=f"{_counted(len(checks), 'check has', 'checks have')} been run "
              f"against the watchlists.",
         entries=tuple(entries),
-        tail=("A possible match is not a finding of wrongdoing. It is a name "
-              "that resembles a listed name closely enough that a person had "
-              "to look." if hits else ""))
+        tail=" ".join(said))
+
+
+def _behind_the_newest_list(engine, checks) -> str:
+    """Said where this party's last check predates the newest list seen.
+
+    Compared against the newest version *this workspace* has been screened
+    against, not against whatever the service holds right now: reading that
+    would mean a network call to render a document, and a record that cannot
+    be printed while the watchlist is unreachable is not a record. Where the
+    workspace has never recorded a version at all, nothing is claimed either
+    way -- an unknown is not evidence of staleness, and saying so would put a
+    warning on every document in a workspace that has simply not swept yet.
+    """
+    from .rescreening import newest_version
+
+    newest = newest_version(engine)
+    if not newest:
+        return ""
+    seen = ""
+    for event in checks:
+        version = str(((event.payload or {}).get("basis") or {})
+                      .get("list_version") or "")
+        if version:
+            seen = version
+    if not seen:
+        return ("This party's checks do not record which version of the "
+                "watchlist they were made against, so whether they are "
+                "current cannot be established from this record.")
+    if seen == newest:
+        return ""
+    return ("The most recent check above was made against an older version "
+            "of the watchlist than this workspace has since screened "
+            "against. Anyone added to the list in between has not been "
+            "checked against this party.")
 
 
 def _found(engine, entity_id: str, cases, today: str) -> Part:

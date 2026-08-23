@@ -613,6 +613,11 @@ UI = {
     "evidence_heading": "Everything on this file, in order",
     "open_regulatory": "Where you stand with IFSCA",
     "find_party": "Look up a party",
+    #: The regulatory page. Every sentence on it is already a field of
+    #: Regulatory; these are the two pieces of furniture around them.
+    "nav_standing": "IFSCA",
+    "standing_clauses_show": "Show all the rules",
+    "standing_clauses_hide": "Hide the rules",
     "ask_open": "Ask about this",
     "ask_about": "About:",
     "ask_here_queue": "your list of open files",
@@ -1932,6 +1937,9 @@ GROUP_TITLE = {
     "POL_OFFICE_VACANT|FILLED": "{n} filled {post} {isare} awaiting confirmation with IFSCA",
     "POL_OFFICE_NOT_BASED_IN_IFSC":
         "{n} required {post} {has} someone not based in GIFT City",
+    "POL_REVIEW_OVERDUE": "{n} {customer} overdue for review",
+    "POL_OWNERSHIP_CHANGED_AFTER_DILIGENCE":
+        "{n} {customer} changed hands since {were} checked",
     "POL_FILING_OVERDUE": "{n} {filing} overdue with IFSCA",
     "POL_FILING_REPEATEDLY_LATE":
         "{n} {filing} overdue — this is not the first",
@@ -2128,6 +2136,24 @@ GROUP_BECAUSE = {
         "a warning to a fund management entity whose principal officer and "
         "key managerial personnel were absent on four such visits.",
     ),
+    "POL_OWNERSHIP_CHANGED_AFTER_DILIGENCE": (
+        "The ownership of each of these customers has changed since you "
+        "finished checking them and set their risk category.",
+        "A customer whose owners have changed is, for anti-money-laundering "
+        "purposes, a different customer: the people you identified may no "
+        "longer be there, and the category you set was against a structure "
+        "that has since moved. Waiting for the scheduled review can mean "
+        "waiting up to five years.",
+    ),
+    "POL_REVIEW_OVERDUE": (
+        "Each of these customers was due to have their due diligence looked "
+        "at again, and has not been.",
+        "How often a customer must be reviewed is set by the risk category "
+        "you gave them — every year for high risk, less often for the rest. "
+        "A review that has lapsed means the customer is outside the "
+        "scrutiny your own firm decided they needed, which is the first "
+        "thing an inspection asks to see the record of.",
+    ),
     "POL_FILING_OVERDUE": (
         "Each of these returns was due and has not been filed.",
         "Late returns are among the most common reasons IFSCA takes action. "
@@ -2302,6 +2328,19 @@ GROUP_ACTIONS = {
         "Make sure the office is staffed and open during business hours — "
         "an inspection can happen on any working day.",
     ),
+    "POL_OWNERSHIP_CHANGED_AFTER_DILIGENCE": (
+        "Identify whoever now holds more than 10% of the customer, and "
+        "confirm the people you identified before are still there.",
+        "Set the risk category again once you have. The structure it was "
+        "set against is not the structure the customer has now.",
+    ),
+    "POL_REVIEW_OVERDUE": (
+        "Refresh what you hold on the customer — identification, ownership, "
+        "and the purpose of the relationship — and check it is still what "
+        "your records say.",
+        "Set the risk category again once you have. Recording the review is "
+        "what moves the next date; nothing here assumes it happened.",
+    ),
     "POL_FILING_OVERDUE": _FILE_THE_RETURN,
     "POL_FILING_REPEATEDLY_LATE": _FILE_THE_RETURN,
     "POL_FILING_OVERDUE|FEE": _PAY_THE_FEE,
@@ -2427,6 +2466,7 @@ def _group_title(policy: str, count: int) -> str:
         fee=_plural(count, "fee is", "fees are"),
         letter=_plural(count, "letter"),
         document=_plural(count, "document"),
+        customer=_plural(count, "customer"),
         # Verb agreement, so a group of one reads as English too.
         have=_plural(count, "has", "have"),
         need=_plural(count, "needs", "need"),
@@ -3136,8 +3176,11 @@ def brief(engine, person: str, today: Optional[str] = None,
     coming = []
     licence = engine.state.licence
     if licence.granted_on:
+        from .licence import principal_officers
+
         for item in instances(licence.granted_on, today,
-                              engine.state.calendar.submitted):
+                              engine.state.calendar.submitted,
+                              principal_officers(licence)):
             state = item.status(today)
             if state not in (Status.UPCOMING, Status.DUE_SOON):
                 continue  # overdue items are Cases, not reminders
@@ -3710,6 +3753,22 @@ class RiskFactor:
 
 
 @dataclass(frozen=True)
+class ProposedFactor:
+    """One factor's part in a proposed band, and what it added.
+
+    Separate from RiskFactor because it answers a different question. That
+    one says what was found; this says what the scorecard did with it -- and
+    an officer asked to agree with a band is owed the arithmetic, not just
+    the total.
+    """
+
+    ref: str
+    wording: str
+    weight: int
+    because: str = ""
+
+
+@dataclass(frozen=True)
 class Party:
     """Everything recorded about one party, on one page."""
 
@@ -3745,6 +3804,15 @@ class Party:
     risk_category: str = ""
     risk_factors: tuple = ()
     risk_unanswered: str = ""
+    #: What the scorecard would suggest, and its workings. Never a category:
+    #: see scorecard.py, and clause 4.2's closing sentence.
+    risk_proposed: str = ""
+    risk_proposed_lead: str = ""
+    risk_proposed_thin: str = ""
+    risk_proposed_scope: str = ""
+    risk_proposed_points: int = 0
+    risk_proposed_from: tuple = ()
+    risk_scorecard: str = ""
     risk_due: str = ""
     risk_caveat: str = ""
     #: The clause 4.2 factors nobody has answered, for the officer to
@@ -3897,6 +3965,13 @@ class Regulatory:
     scorecard_summary: str
     grounds: tuple
     back: str
+    #: The book, against clause 5.11's periodic-review regime.
+    customers_heading: str = ""
+    customers_summary: str = ""
+    #: Said where customers carry no risk category. Never omitted when it
+    #: applies: "no reviews overdue" is true of a book nobody has
+    #: categorised, and true in the way that matters least.
+    customers_caveat: str = ""
     #: The firm's own money against the minimum its licence requires.
     capital_heading: str = ""
     capital_summary: str = ""
@@ -3941,7 +4016,11 @@ def _owed_rows(engine, today: str) -> tuple:
     if not licence.granted_on:
         return ()
     rows = []
-    for item in instances(licence.granted_on, today, engine.state.calendar.submitted):
+    from .licence import principal_officers
+
+    for item in instances(licence.granted_on, today,
+                          engine.state.calendar.submitted,
+                          principal_officers(licence)):
         state = item.status(today)
         charge = item.late_charge_usd(today)
         if state is Status.OVERDUE:
@@ -3952,7 +4031,10 @@ def _owed_rows(engine, today: str) -> tuple:
             status = "Due soon"
             tone = "today"
         elif state is Status.SUBMITTED:
-            status = "Paid" if item.schedule.verb == "paid" else "Filed"
+            # The past participle of the schedule's own verb. "Filed" on a
+            # registration would read as a return that went in somewhere.
+            status = {"paid": "Paid", "done": "Done"}.get(
+                item.schedule.verb, "Filed")
             tone = "settled"
         else:
             status = "Not due yet"
@@ -4101,11 +4183,54 @@ def regulatory(engine, today=None) -> Regulatory:
     _capital_caveat = ("" if _confirmed or _minimum is None else _NOT_CONFIRMED)
     _reported, _reported_summary = _reported_rows(engine)
 
+    # Clause 5.11's regime, as it actually stands on this book. The two
+    # numbers are deliberately reported together: a customer with no risk
+    # category has no review interval, so they cannot be overdue for a
+    # review -- which means a book nobody has categorised shows nothing
+    # overdue and is in the worst position it can be in. Showing the first
+    # number without the second would be this system's oldest mistake on
+    # its most important page.
+    from .risk import due_for_review, never_assessed
+
+    _on_the_book = len(engine.state.graph.entities)
+    _uncategorised = len(never_assessed(engine))
+    _lapsed = len(due_for_review(engine, today))
+    _rated = _on_the_book - _uncategorised
+
+    if not _on_the_book:
+        _customers_summary = "No customers are on the book yet."
+        _customers_caveat = ""
+    else:
+        _customers_summary = (
+            f"{_rated} of {_on_the_book} "
+            f"{_plural(_on_the_book, 'customer carries', 'customers carry')} "
+            f"a risk category. "
+            + (f"{_lapsed} "
+               f"{_plural(_lapsed, 'is', 'are')} overdue for review."
+               # Not "None of those...": a guard on this page rejects the
+               # word, because a bare "None" on screen is far more often a
+               # Python value that escaped than a sentence somebody wrote.
+               if _lapsed else "Not one of them is overdue for review.")
+        )
+        _customers_caveat = ("" if not _uncategorised else (
+            f"{_uncategorised} "
+            f"{_plural(_uncategorised, 'customer has', 'customers have')} no "
+            f"risk category, so {_plural(_uncategorised, 'it has', 'they have')} "
+            f"no review date and {_plural(_uncategorised, 'cannot', 'cannot')} "
+            f"appear as overdue above. Clause 5.11 sets the interval by "
+            f"category, so a customer without one sits outside the review "
+            f"regime rather than passing it. Categorising them is what puts "
+            f"them inside it."
+        ))
+
     return Regulatory(
         heading="Where you stand with IFSCA",
         licence_heading="Your registration",
         licence_summary=summary,
         unlicensed=unlicensed,
+        customers_heading="Your customers, and when they are next reviewed",
+        customers_summary=_customers_summary,
+        customers_caveat=_customers_caveat,
         posts_heading="Posts your licence requires",
         posts=posts,
         owed_heading="What you owe IFSCA",
@@ -4461,6 +4586,51 @@ RISK_CAVEAT = (
 )
 
 
+#: Said above a proposed band. The distinction it draws is the one clause
+#: 4.2 draws in its closing sentence, and the reason this product may show a
+#: band at all: an arithmetic starting point is not a categorisation, and the
+#: officer who sets the category is the one whose name goes on it.
+PROPOSAL_LEAD = (
+    "A starting point, not a decision. This is what the scorecard makes of "
+    "the factors answered so far; the category is yours to set, and yours "
+    "to disagree with."
+)
+
+#: Said where most of clause 4.2's list is still unanswered. A band computed
+#: from four of nineteen factors is a band about four factors, and showing it
+#: with the same confidence as a fully worked one would be the arithmetic
+#: overstating what it knows.
+PROPOSAL_IS_THIN = (
+    "Too few of the factors this scorecard can weigh have been answered for "
+    "the arithmetic to mean much yet. Answering more of them below is what "
+    "makes it worth anything."
+)
+
+#: What the band is a band *of*. The scorecard weighs eight of clause 4.2's
+#: nineteen factors -- the ones this firm's own records can answer -- and the
+#: other eleven need a person. Naming that on every proposal is the whole
+#: reason a band may be shown under a clause that forbids deciding: an
+#: officer reading "low" is entitled to know it is low on the scorable
+#: factors, not low as a customer.
+PROPOSAL_SCOPE = (
+    "{weighed} of the {weighable} factors this scorecard can weigh are "
+    "answered, and they come to {points}. The other {by_hand} in clause 4.2 "
+    "can only be answered by a person, which is why this is a band and not "
+    "a category."
+)
+
+#: Bands, said as bands. Deliberately not RISK_WORDS: those say "Low risk",
+#: which is the name of a *category* somebody puts their name to under clause
+#: 4.1(a). A scorecard proposes a position on its own scale and nothing more,
+#: and giving the two the same words is how the first quietly becomes the
+#: second on a screen somebody reads in a hurry.
+BAND_WORDS = {
+    "LOW": "the low band",
+    "MEDIUM": "the medium band",
+    "HIGH": "the high band",
+}
+
+
 def _risk_panel(engine, entity_id: str, today) -> dict:
     """The customer's risk assessment, as an officer reads it."""
     from .risk import (BY_REF, FACTORS, next_review, observe, unanswered,
@@ -4494,6 +4664,40 @@ def _risk_panel(engine, entity_id: str, today) -> dict:
 
     found = what_screening_found(engine, entity_id)
 
+    # A starting point, computed from exactly what is on screen above. It is
+    # shown whether or not a category has been settled: before, so somebody
+    # has something to react to instead of a blank; after, so an officer
+    # revisiting the file can see whether the evidence has moved away from
+    # the category somebody set.
+    from .scorecard import propose
+
+    suggested = propose(seen)
+    points_said = ("no points" if not suggested.points
+                   else f"{suggested.points} point"
+                        f"{'' if suggested.points == 1 else 's'}")
+    proposal = {
+        "band": BAND_WORDS.get(suggested.band, suggested.band),
+        "points": suggested.points,
+        "lead": PROPOSAL_LEAD,
+        "scope": PROPOSAL_SCOPE.format(
+            weighed=suggested.weighed,
+            weighable=suggested.weighable,
+            points=points_said,
+            by_hand=len(FACTORS) - suggested.weighable,
+        ),
+        "thin": PROPOSAL_IS_THIN if suggested.thin else "",
+        "counted": tuple(
+            ProposedFactor(
+                ref=part.ref,
+                wording=BY_REF[part.ref].wording if part.ref in BY_REF else part.ref,
+                weight=part.weight,
+                because=part.because,
+            )
+            for part in suggested.counted
+        ),
+        "scorecard": suggested.scorecard,
+    }
+
     still_open = tuple(
         OpenFactor(ref=f.ref, group=f.group, wording=f.wording)
         for f in unanswered(assessment)
@@ -4520,6 +4724,7 @@ def _risk_panel(engine, entity_id: str, today) -> dict:
             "open": still_open,
             "screening": found.summary,
             "guidance": found.guidance,
+            "proposal": proposal,
         }
 
     word = RISK_WORDS.get(assessment.category, assessment.category)
@@ -4548,6 +4753,7 @@ def _risk_panel(engine, entity_id: str, today) -> dict:
         "open": still_open,
         "screening": found.summary,
         "guidance": found.guidance,
+        "proposal": proposal,
     }
 
 
@@ -4623,6 +4829,13 @@ def party(engine, entity_id: str, today=None) -> "Party":
         risk_category=panel["category"],
         risk_factors=panel["factors"],
         risk_unanswered=panel["unanswered"],
+        risk_proposed=panel["proposal"]["band"],
+        risk_proposed_lead=panel["proposal"]["lead"],
+        risk_proposed_thin=panel["proposal"]["thin"],
+        risk_proposed_scope=panel["proposal"]["scope"],
+        risk_proposed_points=panel["proposal"]["points"],
+        risk_proposed_from=panel["proposal"]["counted"],
+        risk_scorecard=panel["proposal"]["scorecard"],
         risk_due=panel["due"],
         risk_caveat=panel["caveat"],
         risk_open=panel["open"],
@@ -4670,6 +4883,27 @@ def party(engine, entity_id: str, today=None) -> "Party":
 #: "overdue for re-screening" would therefore be inventing an obligation the
 #: regulator has not imposed -- so the page reports dates and declines to
 #: judge them. The interval is the firm's policy, and the firm has to set it.
+#: Said against a party checked before the newest list this workspace has
+#: been screened against. Deliberately not a judgement about *time* -- that
+#: is what SCREENING_INTERVAL_CAVEAT below declines to make, and it still
+#: declines to. This is a different and harder fact: the list itself has
+#: been replaced since, so somebody added to it in the meantime is somebody
+#: this party has never been checked against. A record saying "checked" is
+#: not wrong about the past and is no longer an answer about the present.
+OUT_OF_DATE_CHECK = (
+    "Checked against an older version of the watchlist. Anyone added since "
+    "has not been checked against this party."
+)
+
+#: The summary line, where any are behind. Says what it can speak for: the
+#: newest list this workspace has seen, which is not necessarily the newest
+#: the service holds -- nothing here can know that until a sweep runs.
+OUT_OF_DATE_SUMMARY = (
+    "{n} of these {were} checked against an older version of the watchlist "
+    "than the newest this workspace has screened against. Running the sweep "
+    "again checks them against the current list."
+)
+
 SCREENING_INTERVAL_CAVEAT = (
     "Clause 5.9 requires screening to be ongoing, but it does not say how "
     "often. This page reports when each party was last checked and does not "
@@ -4701,6 +4935,11 @@ class Check:
     tone: str
     #: A machine address: which party page this row leads to.
     ref: str
+    #: Said only where this party was checked against a list this workspace
+    #: has since moved past. Empty is the ordinary case and shows nothing --
+    #: a row that had to explain itself every time would train an officer to
+    #: stop reading the column.
+    currency: str = ""
 
 
 @dataclass(frozen=True)
@@ -4730,7 +4969,11 @@ class Screening:
     checked_heading: str
     checked: tuple
     checked_none: str
-    back: str
+    #: Empty when every check on record was made against the newest list this
+    #: workspace has screened against. A firm that has just run the sweep
+    #: should see nothing here, and seeing nothing should mean something.
+    out_of_date: str = ""
+    back: str = ""
 
 
 def _latest_screenings(engine) -> dict:
@@ -4746,13 +4989,20 @@ def _latest_screenings(engine) -> dict:
             continue
         payload = event.payload or {}
         record = latest.setdefault(
-            event.subject, {"when": "", "matches": 0, "checks": 0}
+            event.subject,
+            {"when": "", "matches": 0, "checks": 0, "version": ""},
         )
         record["checks"] += 1
         if payload.get("matched"):
             record["matches"] += 1
         if event.occurred_at > record["when"]:
             record["when"] = event.occurred_at
+        # Taken from the last screening in log order rather than the latest
+        # by date: two screens on one day are ordered by the log and by
+        # nothing else, and the version that matters is whichever was
+        # written most recently.
+        record["version"] = str(
+            (payload.get("basis") or {}).get("list_version") or "")
     return latest
 
 
@@ -4810,6 +5060,9 @@ def screening(engine, today=None, per_list: int = 12) -> "Screening":
     })
     latest = _latest_screenings(engine)
     shared = shared_names(graph)
+    from .rescreening import newest_version
+
+    newest = newest_version(engine)
 
     def check_for(entity_id: str):
         """(sort key, Check). The key is the ISO date, never the shown one:
@@ -4827,9 +5080,11 @@ def screening(engine, today=None, per_list: int = 12) -> "Screening":
             tone = "today"
         else:
             found, tone = NOTHING_FOUND, "settled"
+        behind = bool(newest) and record.get("version", "") != newest
         return record["when"], Check(
             who=qualified_name(graph, entity_id, shared), kind=kind,
-            when=_date(record["when"]), result=found, tone=tone, ref=entity_id)
+            when=_date(record["when"]), result=found, tone=tone, ref=entity_id,
+            currency=OUT_OF_DATE_CHECK if behind else "")
 
     checks = [check_for(entity_id) for entity_id in customers]
     unchecked = [check for _, check in checks if check.result == NO_CHECK]
@@ -4859,6 +5114,13 @@ def screening(engine, today=None, per_list: int = 12) -> "Screening":
         )
         tone = "settled"
 
+    behind = sum(1 for check in checked if check.currency)
+    out_of_date = (
+        OUT_OF_DATE_SUMMARY.format(n=behind,
+                                   were=_plural(behind, "was", "were"))
+        if behind else ""
+    )
+
     clause = CLAUSES.get("5.9")
     hidden = max(0, len(unchecked) - per_list)
     return Screening(
@@ -4870,6 +5132,7 @@ def screening(engine, today=None, per_list: int = 12) -> "Screening":
         rule_says=(PLAIN_RULES.get("5.9", clause.heading) if clause else ""),
         rule_clause=(f"Clause {clause.clause_id}" if clause else ""),
         rule_caveat=SCREENING_INTERVAL_CAVEAT,
+        out_of_date=out_of_date,
         link=(DOCUMENTS[clause.doc_id].url if clause else ""),
         unchecked_heading="Nobody has checked these",
         unchecked=tuple(unchecked[:per_list]),
