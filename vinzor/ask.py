@@ -271,6 +271,74 @@ def _search_rules(engine, text: str = "", **_: Any) -> dict:
     }
 
 
+def _lookup_company_uk(engine, company: str = "", **rest: Any) -> dict:
+    """The UK register. ``rest`` carries ``client`` when a test hands one
+    in -- the same shape ``agents._screen_everyone`` accepts one for, and
+    for the same reason: a tool that reaches an external service and only
+    ever builds its own client is a tool nobody can exercise without a real
+    network call behind it. A model never supplies this key; the value it
+    would supply there is a string, not a client, and fails visibly rather
+    than reaching the network under someone else's name.
+    """
+    from .registries import lookup_company_uk
+
+    return lookup_company_uk(company, client=rest.get("client"))
+
+
+def _lookup_company(engine, company: str = "", jurisdiction: str = "",
+                    **rest: Any) -> dict:
+    """OpenCorporates, worldwide. See :func:`_lookup_company_uk` on why
+    ``client`` may arrive in ``rest``."""
+    from .registries import lookup_company
+
+    return lookup_company(company, jurisdiction, client=rest.get("client"))
+
+
+def _transliterate_name(engine, name: str = "", **_: Any) -> dict:
+    """Candidate Latin spellings of a name written in Devanagari or Arabic.
+
+    yente's own name-normalisation library latinises six scripts on the way
+    into a watchlist match -- Latin, Cyrillic, Greek, Armenian, Georgian,
+    Hangul -- and neither of these is one of them. A Hindi- or Arabic-script
+    investor name can reach screening unlatinised, which is a real way to
+    miss a real match: the check runs, finds nothing, and the record says
+    "checked" beside a name the watchlist was never actually asked about in
+    a form it could recognise.
+
+    See ``transliterate.py`` for exactly what this reads and does not --
+    a table, not a model, honest about the difference in the module's own
+    docstring. What it hands back is one spelling to weigh, nothing more:
+    this tool does not re-run :mod:`screening`, does not write a
+    ``SCREENING_COMPLETED`` event, and cannot -- it is a function over a
+    table, with no path to ``engine.ingest`` anywhere in it. A person reads
+    the candidate and decides whether a re-screen under it is worth doing.
+    """
+    from .transliterate import romanize, script_of
+
+    wanted = (name or "").strip()
+    if not wanted:
+        return {"error": "no name to transliterate"}
+
+    found = script_of(wanted)
+    if not found:
+        return {
+            "original": wanted,
+            "script": "",
+            "candidate": "",
+            "note": "This is not written in Devanagari or Arabic script, so "
+                    "there is nothing for this tool to add to it.",
+        }
+    return {
+        "original": wanted,
+        "script": found,
+        "candidate": romanize(wanted),
+        "note": "A table-driven reading, letter by letter -- not a lookup of "
+                "how this person actually spells their own name. Treat it as "
+                "one more spelling worth trying, and decide with a person "
+                "whether it is worth re-screening the party under it.",
+    }
+
+
 TOOLS: Mapping[str, Tool] = {
     tool.name: tool for tool in (
         Tool("dashboard", "nothing",
@@ -299,6 +367,22 @@ TOOLS: Mapping[str, Tool] = {
              "qualified person has confirmed it", _rule, shown="the rulebook"),
         Tool("search_rules", "text",
              "find clauses whose words mention something", _search_rules, shown="the search of the rulebook"),
+        Tool("lookup_company_uk", "company -- a UK company number, or a "
+             "name to search for",
+             "the UK's official company register: status, incorporation "
+             "date, registered office, and who is recorded as having "
+             "significant control over a company. Free, official, and "
+             "needs no key", _lookup_company_uk, shown="the UK company register"),
+        Tool("lookup_company", "company -- a company name to search for; "
+             "jurisdiction -- optional, a code such as gb or us_de",
+             "company registries worldwide, through OpenCorporates. Free, "
+             "but limited to 50 lookups a day, and only works once an API "
+             "token is configured", _lookup_company, shown="the worldwide company register"),
+        Tool("transliterate_name", "name -- a name written in Devanagari or Arabic script",
+             "a candidate Latin spelling of a name written in another "
+             "script, read letter by letter -- for a person to judge "
+             "whether it is worth re-screening the party under it",
+             _transliterate_name, shown="the transliteration of a name"),
     )
 }
 
@@ -422,7 +506,7 @@ _AN_ID = re.compile(r"\b(?:case_[0-9a-f]{6,}|[a-z]{3}_\d{3,})\b")
 #: are what the model is told to call the tools; ``the open files`` is what a
 #: person calls them.
 #:
-#: **Only the ones with an underscore in them.** Four of the nine tools are
+#: **Only the ones with an underscore in them.** Four of the twelve tools are
 #: called ``party``, ``file``, ``rule`` and ``screening`` -- ordinary English
 #: words an officer uses all day, and rewriting those would turn every honest
 #: sentence into nonsense. A single English word is not jargon because a

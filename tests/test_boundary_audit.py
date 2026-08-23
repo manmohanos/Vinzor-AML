@@ -358,7 +358,7 @@ def test_a_tool_is_named_the_way_a_person_would_name_it():
 
 
 def test_an_ordinary_english_word_is_not_rewritten():
-    """Four of the nine tools are called ``party``, ``file``, ``rule`` and
+    """Four of the twelve tools are called ``party``, ``file``, ``rule`` and
     ``screening``. A single English word is not jargon because a function
     happens to share its name, and rewriting those would turn every honest
     sentence into nonsense."""

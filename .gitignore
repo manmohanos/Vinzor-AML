@@ -31,3 +31,13 @@ __pycache__/
 
 # Screenshots are a working aid, not a deliverable.
 .shots/
+
+# mcp/'s own virtualenv (see mcp/README.md). This is the one place a
+# third-party package is actually installed, and a venv is a build output,
+# not a deliverable -- mcp/requirements.txt is what a checkout needs to
+# recreate it.
+.venv/
+
+# Claude Code's own scratch state -- isolated worktrees it creates for
+# parallel agents, session bookkeeping. Not part of this project.
+.claude/
