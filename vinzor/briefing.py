@@ -1932,6 +1932,7 @@ GROUP_TITLE = {
     "POL_OFFICE_VACANT|FILLED": "{n} filled {post} {isare} awaiting confirmation with IFSCA",
     "POL_OFFICE_NOT_BASED_IN_IFSC":
         "{n} required {post} {has} someone not based in GIFT City",
+    "POL_REVIEW_OVERDUE": "{n} {customer} overdue for review",
     "POL_FILING_OVERDUE": "{n} {filing} overdue with IFSCA",
     "POL_FILING_REPEATEDLY_LATE":
         "{n} {filing} overdue — this is not the first",
@@ -2128,6 +2129,15 @@ GROUP_BECAUSE = {
         "a warning to a fund management entity whose principal officer and "
         "key managerial personnel were absent on four such visits.",
     ),
+    "POL_REVIEW_OVERDUE": (
+        "Each of these customers was due to have their due diligence looked "
+        "at again, and has not been.",
+        "How often a customer must be reviewed is set by the risk category "
+        "you gave them — every year for high risk, less often for the rest. "
+        "A review that has lapsed means the customer is outside the "
+        "scrutiny your own firm decided they needed, which is the first "
+        "thing an inspection asks to see the record of.",
+    ),
     "POL_FILING_OVERDUE": (
         "Each of these returns was due and has not been filed.",
         "Late returns are among the most common reasons IFSCA takes action. "
@@ -2302,6 +2312,13 @@ GROUP_ACTIONS = {
         "Make sure the office is staffed and open during business hours — "
         "an inspection can happen on any working day.",
     ),
+    "POL_REVIEW_OVERDUE": (
+        "Refresh what you hold on the customer — identification, ownership, "
+        "and the purpose of the relationship — and check it is still what "
+        "your records say.",
+        "Set the risk category again once you have. Recording the review is "
+        "what moves the next date; nothing here assumes it happened.",
+    ),
     "POL_FILING_OVERDUE": _FILE_THE_RETURN,
     "POL_FILING_REPEATEDLY_LATE": _FILE_THE_RETURN,
     "POL_FILING_OVERDUE|FEE": _PAY_THE_FEE,
@@ -2427,6 +2444,7 @@ def _group_title(policy: str, count: int) -> str:
         fee=_plural(count, "fee is", "fees are"),
         letter=_plural(count, "letter"),
         document=_plural(count, "document"),
+        customer=_plural(count, "customer"),
         # Verb agreement, so a group of one reads as English too.
         have=_plural(count, "has", "have"),
         need=_plural(count, "needs", "need"),

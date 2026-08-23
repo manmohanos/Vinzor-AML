@@ -50,6 +50,7 @@ CASE_NOTICE = "NOTICE"
 CASE_DOCUMENT = "DOCUMENT"
 CASE_CAPITAL = "CAPITAL"
 CASE_DISCLOSURE = "DISCLOSURE"
+CASE_REVIEW = "REVIEW"
 
 
 @dataclass(frozen=True)
@@ -440,6 +441,61 @@ def offices_must_be_filled(ctx: PolicyContext) -> Iterable[Finding]:
             )
         )
     return findings
+
+
+def review_overdue(ctx: PolicyContext) -> Iterable[Finding]:
+    """A customer whose diligence was due to be looked at again, and was not.
+
+    Clause 5.11 sets the interval by risk category, and the interval is the
+    whole point of the category: it is what a firm does with the judgement,
+    not merely a label it files. So a lapsed review is not an administrative
+    slip -- it is the customer sitting outside the scrutiny the firm itself
+    decided they needed.
+
+    The arithmetic for this has existed since the risk register was built and
+    nothing read it. ``due_for_review`` was called by tests and by nothing
+    else, which meant a customer whose refresh date passed a year ago was
+    correctly computed as overdue and silently never mentioned. A check that
+    did not happen must never be reported as a check that found nothing, and
+    a system that knows a review is owed and tells nobody is the same defect
+    with the answer already in hand.
+
+    Severity follows the category rather than the delay. Clause 5.11 gives
+    high-risk customers the shortest interval precisely because they need the
+    most scrutiny, so a high-risk review lapsing is the more serious failure
+    on the day it lapses -- not after some number of days chosen here. There
+    is deliberately no escalation ladder for repeat lapses: unlike a filing,
+    where each missed quarter is a separate breach, a review that stays
+    undone is one review still undone, and re-reporting it as though it were
+    a worsening series would inflate one failure into several.
+    """
+    if ctx.event.event_type is not EventType.REVIEW_OVERDUE:
+        return ()
+    payload = ctx.event.payload
+    category = str(payload.get("category", "")).upper()
+    name = payload.get("name") or ctx.event.subject
+    late = int(payload.get("days_late", 0))
+    return (
+        Finding(
+            policy_id="POL_REVIEW_OVERDUE",
+            case_type=CASE_REVIEW,
+            severity=Severity.HIGH if category == "HIGH" else Severity.MEDIUM,
+            summary=(
+                f"{name} is rated {category.lower()} risk and was due to be "
+                f"reviewed again on {payload.get('due_on')}"
+            ),
+            dedupe_key=f"{ctx.event.subject}|{payload.get('due_on', '')}",
+            detail={
+                "name": name,
+                "category": category,
+                "due_on": payload.get("due_on"),
+                "last_assessed_on": payload.get("last_assessed_on"),
+                "days_late": late,
+                "because": payload.get("because", ""),
+            },
+            citations=cite("5.11"),
+        ),
+    )
 
 
 def filing_overdue(ctx: PolicyContext) -> Iterable[Finding]:
@@ -873,6 +929,7 @@ POLICIES: Sequence[Policy] = (
     activity_within_licence,
     offices_must_be_filled,
     filing_overdue,
+    review_overdue,
 )
 
 

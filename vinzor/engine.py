@@ -179,6 +179,12 @@ class State:
     #: taken into account. Confidential under clause 4.1(d): never rendered
     #: on anything a customer could see.
     risk: dict[str, Any] = field(default_factory=dict)
+    #: ``entity_id|due_on`` for every lapsed review already reported, so the
+    #: sweep records that lateness was observed rather than that it is still
+    #: true every time somebody loads a page. The due date is part of the key
+    #: on purpose: refreshing the diligence writes a new assessment, which
+    #: moves the next date, so a later lapse is a new fact and reports again.
+    reviews_reported: frozenset = frozenset()
     #: Sheets already brought in, by file digest -- what "this exact file
     #: was already imported" is checked against.
     imports: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -256,6 +262,10 @@ def apply_event(state: State, event: Event) -> list[Case]:
                 on=event.occurred_at,
                 seq=event.seq,
             ),
+        }
+    elif kind is EventType.REVIEW_OVERDUE:
+        state.reviews_reported = state.reviews_reported | {
+            f"{event.subject}|{event.payload.get('due_on', '')}"
         }
     elif kind is EventType.SHEET_IMPORTED:
         state.imports = {
@@ -1185,6 +1195,36 @@ class Vinzor:
                         "answer_by": notice.answer_by,
                         "received_on": notice.received_on,
                         "days_late": -(notice.days_left(today) or 0),
+                    },
+                )
+                opened.extend(result.cases)
+
+            # Customer reviews next, and -- like the letters above -- outside
+            # the licence guard below. Clause 5.11 measures from the day the
+            # diligence was last refreshed, which has nothing to do with when
+            # this firm's licence was granted. Nesting it inside that guard
+            # would mean a workspace with no licence date recorded silently
+            # never reported a lapsed review at all: the same defect the
+            # notices carry a comment about, and the reason it is written
+            # twice is that the guard is easy to drift back inside.
+            from .risk import days_late, due_for_review
+
+            for entity_id, assessment, due in due_for_review(self, today):
+                if f"{entity_id}|{due.on}" in self.state.reviews_reported:
+                    continue
+                entity = self.state.graph.entities.get(entity_id)
+                result = self.ingest(
+                    event_type=EventType.REVIEW_OVERDUE,
+                    subject=entity_id,
+                    occurred_at=today,
+                    actor="system",
+                    payload={
+                        "name": getattr(entity, "name", "") or entity_id,
+                        "category": due.category,
+                        "due_on": due.on,
+                        "last_assessed_on": assessment.on,
+                        "because": due.because,
+                        "days_late": days_late(due.on, today),
                     },
                 )
                 opened.extend(result.cases)
