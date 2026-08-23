@@ -1,0 +1,92 @@
+# How the yente MCP server would be launched on the server, alongside
+# deploy/vinzor.service and deploy/screening/docker-compose.yml -- not
+# applied by deploy/apply.sh today, and deliberately so. See mcp/README.md
+# for what this is and why it is not wired into that deploy path yet.
+#
+# The counterpart of running it by hand:
+#   YENTE_BASE_URL=http://127.0.0.1:8090 \
+#     /opt/vinzor-mcp/.venv/bin/yente-mcp --host 127.0.0.1 --port 8091
+
+[Unit]
+Description=yente MCP server - screening surface for LLM agents
+# Ordered after the watchlist it forwards to, not required by it: yente
+# itself is deliberately allowed to fail a deploy (see deploy/README.md,
+# "The watchlist is the one part that may fail"), and a server that answers
+# "yente request failed (retryable=true)" for every call until the index
+# comes up is the correct degraded state, not a reason to refuse to start.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Its own user, distinct from `vinzor`. This process never touches
+# /var/lib/vinzor and has no business reading the workspace or its
+# credentials -- giving it the same account as the product it sits beside
+# would be a privilege this service does not need and cannot justify.
+User=vinzor-mcp
+Group=vinzor-mcp
+
+# Its own checkout and its own virtualenv, at /opt/vinzor-mcp -- not
+# /opt/vinzor, and not vinzor's own interpreter. AGENTS.md's zero-dependency
+# rule is a rule about vinzor/*.py; it holds exactly because this venv is
+# nowhere on that process's sys.path and never will be. Installed with:
+#   python3.11 -m venv /opt/vinzor-mcp/.venv
+#   /opt/vinzor-mcp/.venv/bin/pip install -r mcp/requirements.txt
+WorkingDirectory=/opt/vinzor-mcp
+Environment=PYTHONUNBUFFERED=1
+
+# A yente-client bug on this Python: reading its bundled model.json with no
+# explicit encoding fails under a non-UTF-8 default locale (hit while
+# developing this against Python 3.11 on Windows; Amazon Linux 2023's
+# default locale is UTF-8, so this line is very likely a no-op in
+# production and is kept anyway, because "very likely" is not "always" and
+# the cost of keeping it is one line.
+Environment=PYTHONUTF8=1
+
+# Points at the same address deploy/vinzor.service's VINZOR_SCREENING_URL
+# names and deploy/screening/docker-compose.yml binds yente's port to
+# (127.0.0.1:8090). yente-client does not read VINZOR_SCREENING_URL --
+# that name is this codebase's own, and yente-client is somebody else's
+# package with its own vocabulary -- so the sharing is the *value*, kept in
+# step by hand the same way those two files already keep 8090 in step by
+# hand, not by a mechanism. Change one, change all three, or a "which port
+# is it actually on" bug joins the ones BLOCKS.md already records.
+Environment=YENTE_BASE_URL=http://127.0.0.1:8090
+
+# No key: a self-hosted yente does not ask for one, and OPENSANCTIONS_API_KEY
+# is for the hosted API's own account system, which this deployment
+# deliberately never talks to (see vinzor/screening.py's leaves_this_machine
+# and the off-machine warning it prints).
+
+# Streamable HTTP, loopback only -- nginx is the only thing that reaches
+# outside this box today, and this port is not proxied through it. Reachable
+# here for whichever local process is configured to use it; opening it past
+# loopback is a decision for whoever wires an agent to it, not a default.
+Environment=YENTE_MCP_TRANSPORT=http
+Environment=YENTE_MCP_HOST=127.0.0.1
+Environment=YENTE_MCP_PORT=8091
+
+# Advertised to whatever MCP client connects, so a person looking at their
+# client's server list sees which deployment they are talking to rather than
+# the upstream package's own generic "yente".
+Environment=YENTE_MCP_NAME=vinzor-yente
+
+ExecStart=/opt/vinzor-mcp/.venv/bin/yente-mcp
+
+# No workspace to recover, no state of its own -- every fact this server
+# could ever return is recomputed from yente on the next call. Restart is
+# unconditional and immediate for exactly the reason vinzor.service's own
+# comment gives, applied to a process with nothing to lose from restarting
+# hard: there is no file to leave half-written.
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# No ReadWritePaths: this process writes nothing anywhere, which is also
+# what mcp/tests/test_reads_only.py checks from the inside.
+
+[Install]
+WantedBy=multi-user.target
