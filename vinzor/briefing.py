@@ -3136,8 +3136,11 @@ def brief(engine, person: str, today: Optional[str] = None,
     coming = []
     licence = engine.state.licence
     if licence.granted_on:
+        from .licence import principal_officers
+
         for item in instances(licence.granted_on, today,
-                              engine.state.calendar.submitted):
+                              engine.state.calendar.submitted,
+                              principal_officers(licence)):
             state = item.status(today)
             if state not in (Status.UPCOMING, Status.DUE_SOON):
                 continue  # overdue items are Cases, not reminders
@@ -3941,7 +3944,11 @@ def _owed_rows(engine, today: str) -> tuple:
     if not licence.granted_on:
         return ()
     rows = []
-    for item in instances(licence.granted_on, today, engine.state.calendar.submitted):
+    from .licence import principal_officers
+
+    for item in instances(licence.granted_on, today,
+                          engine.state.calendar.submitted,
+                          principal_officers(licence)):
         state = item.status(today)
         charge = item.late_charge_usd(today)
         if state is Status.OVERDUE:
@@ -3952,7 +3959,10 @@ def _owed_rows(engine, today: str) -> tuple:
             status = "Due soon"
             tone = "today"
         elif state is Status.SUBMITTED:
-            status = "Paid" if item.schedule.verb == "paid" else "Filed"
+            # The past participle of the schedule's own verb. "Filed" on a
+            # registration would read as a return that went in somewhere.
+            status = {"paid": "Paid", "done": "Done"}.get(
+                item.schedule.verb, "Filed")
             tone = "settled"
         else:
             status = "Not due yet"

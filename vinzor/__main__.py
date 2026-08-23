@@ -1043,7 +1043,10 @@ def main(argv: list[str] | None = None) -> int:
     # It used to exist only in this demo, which is why the obligation calendar
     # worked in the walkthrough and was invisible on the served screen.
     granted = engine.state.licence.granted_on
-    schedule = instances(granted, today, engine.state.calendar.submitted)
+    from .licence import principal_officers
+
+    schedule = instances(granted, today, engine.state.calendar.submitted,
+                         principal_officers(engine.state.licence))
     print(f"  licence granted {granted}; {len(schedule)} obligations since then")
     late = engine.observe_deadlines(today)
     print(f"  {len(late)} overdue, now open as work:")

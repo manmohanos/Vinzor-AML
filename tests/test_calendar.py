@@ -133,6 +133,11 @@ def test_period_end_always_falls_within_the_financial_year_named_in_period():
         granted = f"{grant_year}-01-10"
         today = f"{grant_year + 5}-12-31"
         for i in instances(granted, today):
+            if "FY" not in i.period:
+                # The one-time obligations (FINGate, NISM) name no financial
+                # year on purpose: there is no period, only a deadline. Their
+                # own invariant is checked in the random sweep below.
+                continue
             named_fy = int(i.period.split("FY")[1][:4])
             period_end = date.fromisoformat(i.period_end)
             assert financial_year(period_end) == named_fy, (
@@ -523,8 +528,16 @@ def test_every_generated_instance_obeys_its_own_labelling_across_many_random_gra
 
         for item in items:
             period_end = date.fromisoformat(item.period_end)
-            named_fy = int(item.period.split("FY")[1][:4])
-            assert financial_year(period_end) == named_fy, (granted, today, item)
+            if "FY" in item.period:
+                named_fy = int(item.period.split("FY")[1][:4])
+                assert financial_year(period_end) == named_fy, (granted, today, item)
+            else:
+                # A one-time obligation: no period to mislabel, so its
+                # invariant is that the deadline is its own anchor -- FINGate
+                # is due the day it became owed, and a NISM clock ends four
+                # months after it starts.
+                due = date.fromisoformat(item.due_on)
+                assert due >= period_end, (granted, today, item)
             if item.obligation is Obligation.QUARTERLY_REPORT:
                 due = date.fromisoformat(item.due_on)
                 assert due == period_end + timedelta(days=QUARTERLY_REPORT_DAYS), (

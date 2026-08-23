@@ -1193,8 +1193,12 @@ class Vinzor:
             if not licence.granted_on:
                 return opened
             calendar = self.state.calendar
+            from .licence import principal_officers
+
             late = [
-                i for i in outstanding(licence.granted_on, today, calendar.submitted)
+                i for i in outstanding(licence.granted_on, today,
+                                       calendar.submitted,
+                                       principal_officers(licence))
                 if i.status(today) is Status.OVERDUE
                 and i.key not in calendar.reported_late
             ]
