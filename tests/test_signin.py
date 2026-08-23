@@ -1010,11 +1010,18 @@ def test_a_run_reports_what_the_outside_world_is_doing(workspace):
     # this. Both observations fail immediately here -- there is no watchlist
     # and no news service in a test -- which is itself the point: they fail
     # and the run continues.
-    for _ in range(100):
+    # Long enough to clear the real GATHER_SECONDS deadline (server.py),
+    # not a guess: a connection refused locally is near-instant, but this
+    # sandbox sometimes has slow, real, outbound reachability to the
+    # hardcoded default screening URL, and 100 * 0.1s = 10s was shorter
+    # than the 30s ceiling the system itself waits on -- so the poll gave
+    # up before the background gather finished, on nothing but a fast
+    # local network, and read as "still running" when it was not stuck.
+    for _ in range(300):
         _status, body, _ = call(base, f"/api/tasks/{task_id}", cookie=cookie)
         if not body["task"].get("running"):
             break
-        time.sleep(0.1)
+        time.sleep(0.2)
 
     # Nothing is being waited on, so nothing is reported.
     assert "gathering" not in body["task"]
@@ -1044,12 +1051,15 @@ def test_a_source_that_fails_does_not_stop_the_run(workspace):
         base, "/api/onboarding",
         {"name": "Nobody Reachable", "kind": "PERSON"}, cookie=cookie)
 
-    for _ in range(100):
+    # See the sibling test above for why this is 300 * 0.2s rather than
+    # 100 * 0.1s: it has to clear the real GATHER_SECONDS deadline, not an
+    # assumption that a refused connection is always fast.
+    for _ in range(300):
         _status, body, _ = call(base, f"/api/tasks/{started['task_id']}",
                                 cookie=cookie)
         if not body["task"].get("running"):
             break
-        time.sleep(0.1)
+        time.sleep(0.2)
     task = body["task"]
     assert not task.get("running"), "a failed observation held the run open"
     assert task["done_count"] == task["step_count"], (
