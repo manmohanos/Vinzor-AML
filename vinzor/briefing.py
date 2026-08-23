@@ -3713,6 +3713,22 @@ class RiskFactor:
 
 
 @dataclass(frozen=True)
+class ProposedFactor:
+    """One factor's part in a proposed band, and what it added.
+
+    Separate from RiskFactor because it answers a different question. That
+    one says what was found; this says what the scorecard did with it -- and
+    an officer asked to agree with a band is owed the arithmetic, not just
+    the total.
+    """
+
+    ref: str
+    wording: str
+    weight: int
+    because: str = ""
+
+
+@dataclass(frozen=True)
 class Party:
     """Everything recorded about one party, on one page."""
 
@@ -3748,6 +3764,15 @@ class Party:
     risk_category: str = ""
     risk_factors: tuple = ()
     risk_unanswered: str = ""
+    #: What the scorecard would suggest, and its workings. Never a category:
+    #: see scorecard.py, and clause 4.2's closing sentence.
+    risk_proposed: str = ""
+    risk_proposed_lead: str = ""
+    risk_proposed_thin: str = ""
+    risk_proposed_scope: str = ""
+    risk_proposed_points: int = 0
+    risk_proposed_from: tuple = ()
+    risk_scorecard: str = ""
     risk_due: str = ""
     risk_caveat: str = ""
     #: The clause 4.2 factors nobody has answered, for the officer to
@@ -4471,6 +4496,51 @@ RISK_CAVEAT = (
 )
 
 
+#: Said above a proposed band. The distinction it draws is the one clause
+#: 4.2 draws in its closing sentence, and the reason this product may show a
+#: band at all: an arithmetic starting point is not a categorisation, and the
+#: officer who sets the category is the one whose name goes on it.
+PROPOSAL_LEAD = (
+    "A starting point, not a decision. This is what the scorecard makes of "
+    "the factors answered so far; the category is yours to set, and yours "
+    "to disagree with."
+)
+
+#: Said where most of clause 4.2's list is still unanswered. A band computed
+#: from four of nineteen factors is a band about four factors, and showing it
+#: with the same confidence as a fully worked one would be the arithmetic
+#: overstating what it knows.
+PROPOSAL_IS_THIN = (
+    "Too few of the factors this scorecard can weigh have been answered for "
+    "the arithmetic to mean much yet. Answering more of them below is what "
+    "makes it worth anything."
+)
+
+#: What the band is a band *of*. The scorecard weighs eight of clause 4.2's
+#: nineteen factors -- the ones this firm's own records can answer -- and the
+#: other eleven need a person. Naming that on every proposal is the whole
+#: reason a band may be shown under a clause that forbids deciding: an
+#: officer reading "low" is entitled to know it is low on the scorable
+#: factors, not low as a customer.
+PROPOSAL_SCOPE = (
+    "{weighed} of the {weighable} factors this scorecard can weigh are "
+    "answered, and they come to {points}. The other {by_hand} in clause 4.2 "
+    "can only be answered by a person, which is why this is a band and not "
+    "a category."
+)
+
+#: Bands, said as bands. Deliberately not RISK_WORDS: those say "Low risk",
+#: which is the name of a *category* somebody puts their name to under clause
+#: 4.1(a). A scorecard proposes a position on its own scale and nothing more,
+#: and giving the two the same words is how the first quietly becomes the
+#: second on a screen somebody reads in a hurry.
+BAND_WORDS = {
+    "LOW": "the low band",
+    "MEDIUM": "the medium band",
+    "HIGH": "the high band",
+}
+
+
 def _risk_panel(engine, entity_id: str, today) -> dict:
     """The customer's risk assessment, as an officer reads it."""
     from .risk import (BY_REF, FACTORS, next_review, observe, unanswered,
@@ -4504,6 +4574,40 @@ def _risk_panel(engine, entity_id: str, today) -> dict:
 
     found = what_screening_found(engine, entity_id)
 
+    # A starting point, computed from exactly what is on screen above. It is
+    # shown whether or not a category has been settled: before, so somebody
+    # has something to react to instead of a blank; after, so an officer
+    # revisiting the file can see whether the evidence has moved away from
+    # the category somebody set.
+    from .scorecard import propose
+
+    suggested = propose(seen)
+    points_said = ("no points" if not suggested.points
+                   else f"{suggested.points} point"
+                        f"{'' if suggested.points == 1 else 's'}")
+    proposal = {
+        "band": BAND_WORDS.get(suggested.band, suggested.band),
+        "points": suggested.points,
+        "lead": PROPOSAL_LEAD,
+        "scope": PROPOSAL_SCOPE.format(
+            weighed=suggested.weighed,
+            weighable=suggested.weighable,
+            points=points_said,
+            by_hand=len(FACTORS) - suggested.weighable,
+        ),
+        "thin": PROPOSAL_IS_THIN if suggested.thin else "",
+        "counted": tuple(
+            ProposedFactor(
+                ref=part.ref,
+                wording=BY_REF[part.ref].wording if part.ref in BY_REF else part.ref,
+                weight=part.weight,
+                because=part.because,
+            )
+            for part in suggested.counted
+        ),
+        "scorecard": suggested.scorecard,
+    }
+
     still_open = tuple(
         OpenFactor(ref=f.ref, group=f.group, wording=f.wording)
         for f in unanswered(assessment)
@@ -4530,6 +4634,7 @@ def _risk_panel(engine, entity_id: str, today) -> dict:
             "open": still_open,
             "screening": found.summary,
             "guidance": found.guidance,
+            "proposal": proposal,
         }
 
     word = RISK_WORDS.get(assessment.category, assessment.category)
@@ -4558,6 +4663,7 @@ def _risk_panel(engine, entity_id: str, today) -> dict:
         "open": still_open,
         "screening": found.summary,
         "guidance": found.guidance,
+        "proposal": proposal,
     }
 
 
@@ -4633,6 +4739,13 @@ def party(engine, entity_id: str, today=None) -> "Party":
         risk_category=panel["category"],
         risk_factors=panel["factors"],
         risk_unanswered=panel["unanswered"],
+        risk_proposed=panel["proposal"]["band"],
+        risk_proposed_lead=panel["proposal"]["lead"],
+        risk_proposed_thin=panel["proposal"]["thin"],
+        risk_proposed_scope=panel["proposal"]["scope"],
+        risk_proposed_points=panel["proposal"]["points"],
+        risk_proposed_from=panel["proposal"]["counted"],
+        risk_scorecard=panel["proposal"]["scorecard"],
         risk_due=panel["due"],
         risk_caveat=panel["caveat"],
         risk_open=panel["open"],
