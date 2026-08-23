@@ -3943,6 +3943,13 @@ class Regulatory:
     scorecard_summary: str
     grounds: tuple
     back: str
+    #: The book, against clause 5.11's periodic-review regime.
+    customers_heading: str = ""
+    customers_summary: str = ""
+    #: Said where customers carry no risk category. Never omitted when it
+    #: applies: "no reviews overdue" is true of a book nobody has
+    #: categorised, and true in the way that matters least.
+    customers_caveat: str = ""
     #: The firm's own money against the minimum its licence requires.
     capital_heading: str = ""
     capital_summary: str = ""
@@ -4154,11 +4161,54 @@ def regulatory(engine, today=None) -> Regulatory:
     _capital_caveat = ("" if _confirmed or _minimum is None else _NOT_CONFIRMED)
     _reported, _reported_summary = _reported_rows(engine)
 
+    # Clause 5.11's regime, as it actually stands on this book. The two
+    # numbers are deliberately reported together: a customer with no risk
+    # category has no review interval, so they cannot be overdue for a
+    # review -- which means a book nobody has categorised shows nothing
+    # overdue and is in the worst position it can be in. Showing the first
+    # number without the second would be this system's oldest mistake on
+    # its most important page.
+    from .risk import due_for_review, never_assessed
+
+    _on_the_book = len(engine.state.graph.entities)
+    _uncategorised = len(never_assessed(engine))
+    _lapsed = len(due_for_review(engine, today))
+    _rated = _on_the_book - _uncategorised
+
+    if not _on_the_book:
+        _customers_summary = "No customers are on the book yet."
+        _customers_caveat = ""
+    else:
+        _customers_summary = (
+            f"{_rated} of {_on_the_book} "
+            f"{_plural(_on_the_book, 'customer carries', 'customers carry')} "
+            f"a risk category. "
+            + (f"{_lapsed} "
+               f"{_plural(_lapsed, 'is', 'are')} overdue for review."
+               # Not "None of those...": a guard on this page rejects the
+               # word, because a bare "None" on screen is far more often a
+               # Python value that escaped than a sentence somebody wrote.
+               if _lapsed else "Not one of them is overdue for review.")
+        )
+        _customers_caveat = ("" if not _uncategorised else (
+            f"{_uncategorised} "
+            f"{_plural(_uncategorised, 'customer has', 'customers have')} no "
+            f"risk category, so {_plural(_uncategorised, 'it has', 'they have')} "
+            f"no review date and {_plural(_uncategorised, 'cannot', 'cannot')} "
+            f"appear as overdue above. Clause 5.11 sets the interval by "
+            f"category, so a customer without one sits outside the review "
+            f"regime rather than passing it. Categorising them is what puts "
+            f"them inside it."
+        ))
+
     return Regulatory(
         heading="Where you stand with IFSCA",
         licence_heading="Your registration",
         licence_summary=summary,
         unlicensed=unlicensed,
+        customers_heading="Your customers, and when they are next reviewed",
+        customers_summary=_customers_summary,
+        customers_caveat=_customers_caveat,
         posts_heading="Posts your licence requires",
         posts=posts,
         owed_heading="What you owe IFSCA",

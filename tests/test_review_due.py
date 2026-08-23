@@ -153,3 +153,59 @@ def test_it_is_named_in_words_an_officer_reads(engine):
     assert "POL_REVIEW_OVERDUE" in GROUP_BECAUSE
     assert "POL_REVIEW_OVERDUE" in GROUP_ACTIONS
     assert "_" not in GROUP_TITLE["POL_REVIEW_OVERDUE"]
+
+
+# -- the book, on the page ---------------------------------------------------
+
+
+def test_a_book_nobody_has_categorised_does_not_read_as_a_clean_one(engine):
+    """The whole reason this figure is on the page.
+
+    A customer with no risk category has no review interval, so they cannot
+    be overdue for one. That means a book nobody has categorised shows
+    nothing overdue while being in the worst position it can be in -- this
+    system's oldest mistake, on its most important page. The caveat is not
+    decoration; it is the thing that makes the number above it honest.
+    """
+    from vinzor.briefing import regulatory
+
+    person(engine, "p1", "Rohan Desai")
+    person(engine, "p2", "Anita Rao")
+
+    page = regulatory(engine, "2026-08-23")
+    assert "0 of 2" in page.customers_summary
+    assert page.customers_caveat, (
+        "two uncategorised customers and the page said nothing")
+    assert "5.11" in page.customers_caveat
+
+
+def test_the_caveat_goes_away_once_everyone_is_categorised(engine):
+    """A caveat that is always on screen is a caveat nobody reads."""
+    from vinzor.briefing import regulatory
+
+    person(engine, "p1", "Rohan Desai")
+    rate(engine, "p1", "LOW", "2026-01-10")
+
+    page = regulatory(engine, "2026-08-23")
+    assert not page.customers_caveat
+    assert "1 of 1" in page.customers_summary
+    assert "Not one of them is overdue" in page.customers_summary
+
+
+def test_the_page_counts_a_lapsed_review(engine):
+    from vinzor.briefing import regulatory
+
+    person(engine, "p1", "Rohan Desai")
+    rate(engine, "p1", "HIGH", "2024-01-10")
+
+    page = regulatory(engine, "2026-08-23")
+    assert "1 is overdue for review" in page.customers_summary
+
+
+def test_an_empty_book_says_so_rather_than_reporting_nothing_overdue(engine):
+    """Nought of nought carrying a category is not a compliance position."""
+    from vinzor.briefing import regulatory
+
+    page = regulatory(engine, "2026-08-23")
+    assert "No customers are on the book yet." == page.customers_summary
+    assert not page.customers_caveat
