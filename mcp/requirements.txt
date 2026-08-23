@@ -1,0 +1,11 @@
+# Pinned, not floored -- an unpinned range is a promise this file cannot
+# keep about a package outside this project's own release process. See
+# mcp/README.md for why this dependency exists at all and why it is not a
+# violation of AGENTS.md's "never add a dependency to the core": nothing
+# under vinzor/*.py imports this or anything it pulls in.
+#
+# yente-client==0.2.0 (MIT, github.com/opensanctions/yente-client). The
+# [mcp] extra adds fastmcp>=3.4, which is what actually speaks the Model
+# Context Protocol; yente-client's own runtime deps are httpx and pydantic.
+# Installed and exercised against 0.2.0 -- see mcp/tests/.
+yente-client[mcp]==0.2.0

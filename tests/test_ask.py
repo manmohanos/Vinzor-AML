@@ -420,6 +420,75 @@ def test_the_rule_search_says_when_the_register_simply_has_nothing(workspace):
     assert "not the whole rulebook" in found["note"]
 
 
+# -- transliterating a name ---------------------------------------------
+
+
+def test_a_devanagari_name_comes_back_with_a_candidate_spelling(workspace):
+    from vinzor.ask import _transliterate_name
+
+    found = _transliterate_name(workspace, name="प्रिया शर्मा")
+    assert found["script"] == "devanagari"
+    assert found["candidate"] == "Priya Sharma"
+    assert found["original"] == "प्रिया शर्मा"
+
+
+def test_an_arabic_name_comes_back_with_a_candidate_spelling(workspace):
+    from vinzor.ask import _transliterate_name
+
+    found = _transliterate_name(workspace, name="سامي")
+    assert found["script"] == "arabic"
+    assert found["candidate"] == "Sami"
+
+
+def test_a_name_already_in_latin_gets_nothing_added(workspace):
+    """This is a table for two scripts, not an assurance that every name is
+    already screenable -- a name in a third script gets an honest "nothing
+    to add", not a spelling invented to look useful."""
+    from vinzor.ask import _transliterate_name
+
+    found = _transliterate_name(workspace, name="John Smith")
+    assert found["candidate"] == ""
+    assert found["script"] == ""
+    assert "nothing for this tool to add" in found["note"]
+
+
+def test_an_empty_name_is_refused_rather_than_guessed(workspace):
+    from vinzor.ask import _transliterate_name
+
+    assert "error" in _transliterate_name(workspace, name="")
+    assert "error" in _transliterate_name(workspace)
+
+
+def test_transliterating_a_name_never_reruns_screening_or_writes_anything(workspace):
+    """The whole point of the tool. A candidate spelling is a suggestion for
+    a person to act on, never a re-screen this system performs on its own --
+    there is no ``SCREENING_COMPLETED`` event here, and no event of any
+    kind, whatever the tool is asked about."""
+    from vinzor.ask import _transliterate_name
+
+    before = list(workspace.log)
+    for name in ("प्रिया शर्मा", "سامي", "John Smith", ""):
+        _transliterate_name(workspace, name=name)
+    assert list(workspace.log) == before, "the log changed"
+
+
+def test_the_transliteration_tool_is_asked_for_through_the_ordinary_loop(workspace):
+    """Exercised the way the model actually reaches it: a tool call, a
+    fenced result, an answer built from what came back."""
+    talk = scripted(
+        {"tool": "transliterate_name", "arguments": {"name": "राम"},
+         "why": "checking for a Latin spelling"},
+        {"answer": "The name transliterates to Ram.",
+         "used": ["transliterate_name"]},
+    )
+    answer = ask(workspace, "What is प्रिया शर्मा's name in Latin letters?",
+                 transport=talk, person="Meera Nair", record=False)
+
+    assert answer.steps[0].tool == "transliterate_name"
+    assert answer.steps[0].shown == "the transliteration of a name"
+    assert "Ram" in answer.answer
+
+
 def test_a_reasonable_guess_at_an_argument_name_still_works(workspace):
     """The tool is called "file" and its argument is file_id, so the obvious
     guess -- and the one the model actually made -- was {"file": "case_..."}.
