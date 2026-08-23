@@ -613,6 +613,11 @@ UI = {
     "evidence_heading": "Everything on this file, in order",
     "open_regulatory": "Where you stand with IFSCA",
     "find_party": "Look up a party",
+    #: The regulatory page. Every sentence on it is already a field of
+    #: Regulatory; these are the two pieces of furniture around them.
+    "nav_standing": "IFSCA",
+    "standing_clauses_show": "Show all the rules",
+    "standing_clauses_hide": "Hide the rules",
     "ask_open": "Ask about this",
     "ask_about": "About:",
     "ask_here_queue": "your list of open files",

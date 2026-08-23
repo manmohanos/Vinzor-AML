@@ -261,6 +261,8 @@
       fallback: "Onboard an investor" },
     { at: "queue", hash: "#/queue", key: "nav_queue", fallback: "Your list" },
     { at: "parties", hash: "#/parties", key: "find_party", fallback: "Parties" },
+    { at: "standing", hash: "#/standing", key: "nav_standing",
+      fallback: "IFSCA" },
     { at: "ask", hash: "#/ask", key: "ask_go", fallback: "Ask" }
   ];
 
@@ -3946,6 +3948,158 @@ a { color: #000; }
       </section>`;
   }
 
+  /* ---------- where this firm stands with IFSCA ----------
+
+     Everything on this page was already computed and already served at
+     /api/regulatory. Nothing in the browser ever asked for it, so the
+     licence, the posts the licence requires, the filings owed, the firm's
+     capital against its minimum, the twenty-nine clauses this system
+     enforces and what IFSCA has actually acted on were all correct and all
+     invisible.
+
+     Every sentence here is the server's -- the headings included, because
+     they are fields of Regulatory rather than furniture. This file arranges
+     them and adds nothing. Two exceptions, both marked: the nav label, and
+     the show/hide on the clause register, which is a browser concern
+     (twenty-nine rows sitting below the things an officer opened the page
+     for) and not a statement about the firm. */
+
+  function standingRows(rows, render) {
+    return rows && rows.length ? rows.map(render) : "";
+  }
+
+  function standingScreen() {
+    var where = frame("standing");
+    busy(where);
+    get("/api/regulatory").then(function (page) {
+      absorb(page);
+      mount(where, h`
+        <div class="head"><h1>${page.heading || ""}</h1></div>
+
+        <section class="card pad">
+          <div class="section-head"><h2>${page.licence_heading || ""}</h2></div>
+          ${page.licence_summary
+            ? h`<p class="prose">${page.licence_summary}</p>` : ""}
+          ${page.unlicensed
+            ? h`<p class="note bad prose">${page.unlicensed}</p>` : ""}
+        </section>
+
+        ${page.customers_heading ? h`
+        <section class="card pad">
+          <div class="section-head"><h2>${page.customers_heading}</h2></div>
+          <p class="prose">${page.customers_summary || ""}</p>
+          ${page.customers_caveat
+            ? h`<p class="note bad prose">${page.customers_caveat}</p>` : ""}
+        </section>` : ""}
+
+        <section class="card pad">
+          <div class="section-head"><h2>${page.posts_heading || ""}</h2></div>
+          <table class="grid"><tbody>
+            ${standingRows(page.posts, function (post) {
+              return h`<tr>
+                <td class="standing-what">
+                  <span class="dot" data-tone="${post.tone || "plain"}"></span>${
+                    post.office}
+                </td>
+                <td>${post.holder}</td>
+              </tr>`;
+            })}
+          </tbody></table>
+        </section>
+
+        <section class="card pad">
+          <div class="section-head"><h2>${page.owed_heading || ""}</h2></div>
+          ${page.owed_summary
+            ? h`<p class="prose">${page.owed_summary}</p>` : ""}
+          <table class="grid"><tbody>
+            ${standingRows(page.owed, function (owed) {
+              return h`<tr>
+                <td class="standing-what">
+                  <span class="dot" data-tone="${owed.tone || "plain"}"></span>${
+                    owed.what}
+                </td>
+                <td class="small">${owed.when}</td>
+                <td class="small">${owed.status}</td>
+                <td class="small faint">${owed.charge || ""}</td>
+              </tr>`;
+            })}
+          </tbody></table>
+        </section>
+
+        ${page.capital_heading ? h`
+        <section class="card pad">
+          <div class="section-head"><h2>${page.capital_heading}</h2></div>
+          <p class="prose">${page.capital_summary || ""}</p>
+          ${page.capital_caveat
+            ? h`<p class="note bad prose">${page.capital_caveat}</p>` : ""}
+        </section>` : ""}
+
+        <section class="card pad">
+          <div class="section-head"><h2>${page.scorecard_heading || ""}</h2></div>
+          ${page.scorecard_summary
+            ? h`<p class="prose">${page.scorecard_summary}</p>` : ""}
+          <table class="grid"><tbody>
+            ${standingRows(page.grounds, function (row) {
+              return h`<tr>
+                <td class="standing-what">
+                  <span class="dot" data-tone="${row.tone || "plain"}"></span>${
+                    row.ground}
+                </td>
+                <td class="small num">${row.actions}</td>
+                <td class="small">${row.coverage}</td>
+                <td class="small faint">${row.position}</td>
+              </tr>`;
+            })}
+          </tbody></table>
+        </section>
+
+        <section class="card pad">
+          <div class="section-head">
+            <h2>${page.register_heading || ""}</h2>
+            <button type="button" class="btn-link small" id="see-rules">${
+              word("standing_clauses_show", "Show all the rules")}</button>
+          </div>
+          ${page.register_summary
+            ? h`<p class="prose">${page.register_summary}</p>` : ""}
+          ${page.source_check
+            ? h`<p class="tiny faint prose">${page.source_check}</p>` : ""}
+          ${page.register_caveat
+            ? h`<p class="note bad prose">${page.register_caveat}</p>` : ""}
+          ${page.amendment
+            ? h`<p class="note prose">${page.amendment}</p>` : ""}
+          <table class="grid" id="rules" hidden><tbody>
+            ${standingRows(page.clauses, function (row) {
+              return h`<tr>
+                <td class="standing-what">
+                  <span class="dot" data-tone="${row.tone || "plain"}"></span>${
+                    row.clause}
+                </td>
+                <td class="small">${row.says}</td>
+                <td class="small faint">${row.checked}</td>
+                <td class="small">${row.link
+                  ? h`<a href="${row.link}" target="_blank"
+                        rel="noopener noreferrer">${row.where || row.document}</a>`
+                  : row.where}</td>
+              </tr>`;
+            })}
+          </tbody></table>
+        </section>`);
+
+      var toggle = document.getElementById("see-rules");
+      var rules = document.getElementById("rules");
+      if (toggle && rules) {
+        toggle.addEventListener("click", function () {
+          var hiding = rules.hasAttribute("hidden");
+          if (hiding) { rules.removeAttribute("hidden"); }
+          else { rules.setAttribute("hidden", ""); }
+          toggle.textContent = hiding
+            ? word("standing_clauses_hide", "Hide the rules")
+            : word("standing_clauses_show", "Show all the rules");
+        });
+      }
+    }).catch(function (error) { failed(where, error); });
+  }
+
   /* ---------- the router ---------- */
 
   function show() {
@@ -3961,6 +4115,7 @@ a { color: #000; }
     if (at.name === "record" && at.a) { recordScreen(at.a); return; }
     if (at.name === "party" && at.a) { partyScreen(at.a); return; }
     if (at.name === "parties") { partiesScreen(); return; }
+    if (at.name === "standing") { standingScreen(); return; }
     if (at.name === "ask") { askScreen(); return; }
     home();
   }
