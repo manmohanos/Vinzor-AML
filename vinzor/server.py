@@ -2650,6 +2650,79 @@ def open_workspace(path: Optional[Path] = None, dataset: Path = DEFAULT_DATASET,
     return engine
 
 
+#: How often the overnight thread wakes to ask whether tonight's run has
+#: happened. Fifteen minutes: the run is once a day, so the only thing this
+#: interval controls is how long after the hour it starts, and a thread that
+#: wakes four times an hour costs nothing measurable.
+NIGHTLY_CHECK_SECONDS = 900
+
+#: The hour, local to the machine, from which a run is allowed to start.
+#: Not a scheduler -- one number and a comparison. The run is idempotent, so
+#: the only reason to name an hour at all is to keep a whole-book screening
+#: off the middle of somebody's working day.
+NIGHTLY_FROM_HOUR = 2
+
+
+def _overnight(engine) -> None:
+    """Sweep the book once a day, inside the process that serves it.
+
+    This runs here rather than from a separate ``python -m vinzor nightly``
+    on a timer, and the reason is worth stating because the timer is the
+    obvious design and it is wrong for this store.
+
+    The log is single-writer SQLite and the engine holds its projection in
+    memory. A second process appending to the same file would not corrupt
+    the chain -- ``seq`` is a primary key and ``event_hash`` is unique, so
+    the loser of a race fails loudly -- but the running server's state would
+    not contain what that process wrote. Every screen would then be a fold
+    over an incomplete log until somebody restarted the service, and
+    ``rebuild() == live`` would stop holding. A nightly sweep whose whole
+    purpose is that the figures are current cannot be delivered by a
+    mechanism that makes them stale.
+
+    So the schedule stays a comparison against the clock and the *writing*
+    stays where every other write in this process is. The clock is read here
+    because this module is a boundary; nothing under it learns the date
+    except by being told.
+
+    Off unless VINZOR_NIGHTLY is set, so a laptop demonstration never starts
+    screening the whole book while somebody is talking over it.
+    """
+    import time
+    from datetime import datetime
+
+    from .screening import WatchlistClient
+    from .sweep import currency, run
+
+    while True:
+        time.sleep(NIGHTLY_CHECK_SECONDS)
+        try:
+            now = datetime.now()
+            today = now.date().isoformat()
+            if now.hour < NIGHTLY_FROM_HOUR:
+                continue
+            done = currency(engine, today).last
+            if done is not None and done.on == today:
+                continue
+            client = WatchlistClient(
+                url=os.environ.get("VINZOR_SCREENING_URL",
+                                   "https://api.opensanctions.org"),
+                api_key=os.environ.get("VINZOR_SCREENING_KEY", ""),
+                scope=os.environ.get("VINZOR_SCREENING_SCOPE", "default"),
+            )
+            ran = run(engine, today=today, client=client)
+            print(f"  swept {ran.on}: {ran.screened} screened, "
+                  f"{ran.files_opened} file(s) opened, "
+                  f"{len(ran.unreachable)} unreachable")
+        except Exception as broke:      # noqa: BLE001 - one night, not the server
+            # A sweep that throws must not take the workspace down with it.
+            # The failure is visible where it matters anyway: no record was
+            # written for tonight, so every screen goes on saying the
+            # figures have not been refreshed since the last run that did
+            # finish -- which is exactly what happened.
+            print(f"  overnight sweep failed: {type(broke).__name__}: {broke}")
+
+
 def serve(host: str = "127.0.0.1", port: int = 8000,
           workspace: Optional[Path] = None) -> None:
     from .providers import check_region
@@ -2675,6 +2748,9 @@ def serve(host: str = "127.0.0.1", port: int = 8000,
         print("  as anybody. Fine on a laptop, not for real customer data:")
         print('    python -m vinzor password --name "Their Name" '
               "--workspace live.db")
+    if os.environ.get("VINZOR_NIGHTLY"):
+        threading.Thread(target=_overnight, args=(engine,), daemon=True).start()
+        print(f"  overnight sweep on, from {NIGHTLY_FROM_HOUR:02d}:00 daily")
     print("  Ctrl-C to stop")
     try:
         httpd.serve_forever()

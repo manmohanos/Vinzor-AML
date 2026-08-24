@@ -3976,6 +3976,8 @@ a { color: #000; }
       mount(where, h`
         <div class="head"><h1>${page.heading || ""}</h1></div>
 
+        ${page.swept ? h`<p class="note prose swept">${page.swept}</p>` : ""}
+
         <section class="card pad">
           <div class="section-head"><h2>${page.licence_heading || ""}</h2></div>
           ${page.licence_summary

@@ -55,6 +55,18 @@ Environment=VINZOR_BEDROCK_REGION=ap-south-1
 Environment=VINZOR_SCREENING_URL=http://127.0.0.1:8090
 Environment=VINZOR_SCREENING_SCOPE=default
 
+# The overnight sweep, in this process rather than on a systemd timer.
+#
+# The timer is the obvious shape and it is wrong for this store: the log is
+# single-writer SQLite and the engine holds its projection in memory, so a
+# separate process appending to live.db would leave this one serving a fold
+# over an incomplete log until it was restarted. See server._overnight.
+#
+# Off by default in the code, so a laptop never starts screening a whole
+# book mid-demonstration. On here, because this is the machine where the
+# figures are meant to be current.
+Environment=VINZOR_NIGHTLY=1
+
 # An absolute path on purpose. Amazon Linux 2023 ships 3.9 as `python3` and
 # installs the 3.11 the core requires here; naming it exactly means a
 # machine missing that package fails at start-up with a clear error rather
