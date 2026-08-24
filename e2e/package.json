@@ -1,0 +1,12 @@
+{
+  "name": "vinzor-e2e",
+  "private": true,
+  "description": "Browser tests for the officer journey. Deliberately outside the Python package: nothing here is a dependency of the product, and `dependencies = []` in pyproject.toml stays true.",
+  "scripts": {
+    "test": "playwright test",
+    "install-browsers": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
+  }
+}
