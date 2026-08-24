@@ -3972,6 +3972,11 @@ class Regulatory:
     #: applies: "no reviews overdue" is true of a book nobody has
     #: categorised, and true in the way that matters least.
     customers_caveat: str = ""
+    #: Whether an overnight run has refreshed any of this lately. Sits above
+    #: the figures rather than beside them: every count on this page is a
+    #: claim about the present, and a workspace nobody has swept is making
+    #: those claims out of records that stopped moving.
+    swept: str = ""
     #: The firm's own money against the minimum its licence requires.
     capital_heading: str = ""
     capital_summary: str = ""
@@ -4081,6 +4086,56 @@ def _signed_off(engine) -> dict:
                 f"this on {_date(record['verified_at'])}. {record['note']}"
             )
     return out
+
+
+#: Said where no overnight run has ever happened in this workspace. The
+#: strongest of the three, because it is the case where every figure on the
+#: page reads its best and means least: nothing is overdue, nothing has
+#: matched, and nothing has looked.
+NEVER_SWEPT = (
+    "No overnight check has ever run here. Every figure on this page was "
+    "worked out from records as they stand, and nothing has re-checked them "
+    "against the watchlists or the calendar since they were entered. Treat "
+    "what follows as the state of your records, not the state of the world."
+)
+
+#: Said where the last run is older than a night. Names the date rather than
+#: only the gap: "3 days ago" is a number somebody argues with, and a date is
+#: a thing they can go and look at.
+SWEPT_STALE = (
+    "The last overnight check ran on {when}, {days} days ago. Anything that "
+    "has changed since — a name added to a watchlist, a date that has "
+    "passed — is not in the figures below."
+)
+
+#: Said where the run is current. Short on purpose: it is the ordinary case,
+#: and a reassurance repeated at length is a reassurance that gets skipped.
+SWEPT_RECENTLY = "Last overnight check: {when}."
+
+#: Appended where the run happened but could not reach the watchlist for
+#: somebody. The run is not reported as clean, because it was not.
+SWEPT_INCOMPLETE = (
+    " {n} {party} could not be checked that night and {were} not screened."
+)
+
+
+def _swept(engine, today: str) -> str:
+    """One sentence about whether these figures have been refreshed."""
+    from .sweep import currency
+
+    how = currency(engine, today)
+    if how.never:
+        return NEVER_SWEPT
+    said = (SWEPT_STALE.format(when=_date(how.last.on), days=how.days_ago)
+            if how.stale
+            else SWEPT_RECENTLY.format(when=_date(how.last.on)))
+    missed = len(how.last.unreachable)
+    if missed:
+        said += SWEPT_INCOMPLETE.format(
+            n=missed,
+            party=_plural(missed, "party", "parties"),
+            were=_plural(missed, "was", "were"))
+    return said
 
 
 def regulatory(engine, today=None) -> Regulatory:
@@ -4229,6 +4284,7 @@ def regulatory(engine, today=None) -> Regulatory:
         licence_summary=summary,
         unlicensed=unlicensed,
         customers_heading="Your customers, and when they are next reviewed",
+        swept=_swept(engine, today),
         customers_summary=_customers_summary,
         customers_caveat=_customers_caveat,
         posts_heading="Posts your licence requires",

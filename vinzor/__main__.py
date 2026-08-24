@@ -55,6 +55,12 @@ USAGE = """vinzor
                                 date against the live watchlist (--all for
                                 everyone, --limit N); meant for a nightly
                                 timer
+  python -m vinzor nightly      the whole overnight run: screen what is
+                                stale, then look for passed deadlines, and
+                                record that it happened (--as-of YYYY-MM-DD
+                                to replay a date). For a workspace nothing
+                                is serving: the deployed sweep runs inside
+                                the server, set VINZOR_NIGHTLY=1
   python -m vinzor readiness    check the client book against clause 5.4.2,
                                 which is what any KYC registration agency
                                 upload needs before it needs anything else
@@ -78,8 +84,8 @@ USAGE = """vinzor
     --port N        default 8000
     --workspace P   persist to P instead of memory (decisions survive a restart)
 
-  rescreen and assist take --workspace P too, and want it: both write facts
-  that are only worth having if they outlive the process.
+  nightly, rescreen and assist take --workspace P too, and want it: all
+  three write facts that are only worth having if they outlive the process.
 """
 
 
@@ -230,6 +236,64 @@ def _rescreen_cli(argv: list[str]) -> int:
     return 1 if swept.unreachable else 0
 
 
+def _nightly_cli(argv: list[str]) -> int:
+    """The whole overnight run: screen what is stale, then look for deadlines.
+
+    This is what the timer calls. It exists as one command rather than two
+    lines in a shell script so that the record of the run is written once,
+    by the thing that knows how the whole run went -- including a run where
+    the watchlist was unreachable from start to finish, which is exactly the
+    run that must not leave the screens claiming currency.
+
+    Exit codes matter here in a way they do not for the interactive
+    commands, because nothing is watching the output: 0 for a clean run,
+    1 for a run that could not reach the watchlist for somebody. A timer
+    that reports success through a fortnight of failures is the monitoring
+    equivalent of a check that did not happen.
+
+    **Not for a workspace a server currently has open.** The deployed sweep
+    runs inside the serving process (``server._overnight``) and this command
+    is for a workspace nothing is serving -- an operator's machine, a
+    restore, or ``--as-of`` to replay a date. Run against a live file, this
+    would append events the running server's in-memory projection does not
+    contain, and every screen it serves would be a fold over an incomplete
+    log until the service was restarted. The chain itself is safe -- ``seq``
+    is a primary key -- so the failure is silent wrongness rather than
+    damage, which is the worse of the two here.
+    """
+    import os
+
+    from .screening import (OFF_MACHINE_WARNING, WatchlistClient,
+                            leaves_this_machine)
+    from .sweep import run
+
+    engine = _open(argv)
+    client = WatchlistClient(
+        url=os.environ.get("VINZOR_SCREENING_URL", "https://api.opensanctions.org"),
+        api_key=os.environ.get("VINZOR_SCREENING_KEY", ""),
+        scope=os.environ.get("VINZOR_SCREENING_SCOPE", "default"),
+    )
+    if leaves_this_machine(client.url):
+        from urllib.parse import urlparse
+
+        print(OFF_MACHINE_WARNING.format(
+            host=urlparse(client.url).hostname or client.url))
+
+    today = _value(argv, "--as-of") if "--as-of" in argv else date.today().isoformat()
+    ran = run(engine, today=today, client=client)
+
+    print(f"  swept {ran.on}: {ran.screened} screened, "
+          f"{ran.files_opened} file(s) opened")
+    for party, refused in ran.unreachable:
+        # Named, never counted. See rescreening.rescreen.
+        print(f"  NOT screened: {engine.state.graph.name_of(party)} -- {refused}")
+    intact, broken = engine.verify()
+    print("  chain " + ("verifies" if intact else f"BROKEN: {broken}"))
+    if not intact:
+        return 1
+    return 1 if ran.unreachable else 0
+
+
 def _assist_cli(argv: list[str]) -> int:
     """Prepare suggestions for open name checks. A boundary: it knows the date.
 
@@ -373,6 +437,8 @@ def main(argv: list[str] | None = None) -> int:
         return _screen_cli(argv[1:])
     if argv and argv[0] == "rescreen":
         return _rescreen_cli(argv[1:])
+    if argv and argv[0] == "nightly":
+        return _nightly_cli(argv[1:])
     if argv and argv[0] == "assist":
         return _assist_cli(argv[1:])
     if argv and argv[0] == "import":

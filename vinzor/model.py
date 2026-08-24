@@ -125,6 +125,11 @@ class EventType(StrEnum):
     # what was written. The import is itself a record -- the first question
     # about any surprising party is "where did this row come from", and the
     # digest is what makes "this exact file, again" a checkable claim.
+    #: One overnight run of the whole book: what it screened, what it could
+    #: not reach, what it opened. Recorded even when the run went badly --
+    #: a workspace whose sweep has been failing for a fortnight must not go
+    #: on saying it was last swept the night before it broke.
+    SWEEP_COMPLETED = "SWEEP_COMPLETED"
     SHEET_IMPORTED = "SHEET_IMPORTED"
     ACTOR_ENROLLED = "ACTOR_ENROLLED"
     ACTOR_REVOKED = "ACTOR_REVOKED"
